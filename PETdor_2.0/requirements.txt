@@ -1,0 +1,4 @@
+streamlit
+bcrypt
+fpdf2
+python-dotenv
