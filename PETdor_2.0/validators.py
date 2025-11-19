@@ -9,26 +9,31 @@ def validar_email(email: str) -> bool:
     """
     Valida o formato de um endereço de e-mail.
     """
-    # Regex simples para validação de e-mail. Pode ser mais complexa se necessário.
-    # Garante que há um @ e um ponto no domínio.
-    if not email or not isinstance(email, str):
-        return False
-    return re.match(r"[^@]+@[^@]+\.[^@]+", email) is not None
+    # Regex simples para validação de e-mail
+    # Pode ser mais complexo dependendo dos requisitos
+    regex = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+    return re.match(regex, email) is not None
 
-def validar_senha(senha: str, min_len: int = 6, require_digit: bool = False, require_upper: bool = False) -> bool:
+def validar_senha(senha: str) -> bool:
     """
-    Valida a complexidade de uma senha.
-    Por padrão, verifica apenas o comprimento mínimo.
-    Pode ser configurado para exigir dígitos e letras maiúsculas.
+    Valida a força de uma senha.
+    Requisitos:
+    - Mínimo de 8 caracteres
+    - Pelo menos uma letra maiúscula
+    - Pelo menos uma letra minúscula
+    - Pelo menos um número
+    - Pelo menos um caractere especial
     """
-    if not senha or not isinstance(senha, str):
+    if len(senha) < 8:
         return False
-    if len(senha) < min_len:
+    if not re.search(r"[A-Z]", senha): # Pelo menos uma maiúscula
         return False
-    if require_digit and not any(char.isdigit() for char in senha):
+    if not re.search(r"[a-z]", senha): # Pelo menos uma minúscula
         return False
-    if require_upper and not any(char.isupper() for char in senha):
+    if not re.search(r"\d", senha):    # Pelo menos um número
+        return False
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", senha): # Pelo menos um caractere especial
         return False
     return True
 
-# Você pode adicionar outras funções de validação aqui conforme a necessidade do projeto.
+# Você pode adicionar outras funções de validação aqui, se necessário.
