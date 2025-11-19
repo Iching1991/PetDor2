@@ -4,11 +4,11 @@
 🐈 Configuração de avaliação de dor para GATOS.
 Escala: 0 a 7 (baseada em escalas de dor felina).
 """
-from .index import EspecieConfig, Pergunta # Importa de especies.index agora!
+from .index import EspecieConfig, Pergunta
 
-CONFIG_GATO = EspecieConfig( # <-- Nome da variável ajustado para CONFIG_GATO
+CONFIG_GATOS = EspecieConfig( # <-- NOME DA VARIÁVEL: CONFIG_GATOS (plural)
     nome="Gato",
-    especie_id="gato",
+    especie_id="gato", # <-- Adicionado o campo especie_id aqui!
     descricao="Avaliação de dor em gatos - Escala de 0 (ausente) a 7 (severa).",
     opcoes_escala=[
         "0 - Ausente",
