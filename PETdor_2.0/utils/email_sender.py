@@ -70,6 +70,44 @@ def enviar_email_confirmacao(email, nome, token):
     corpo = f"""
         <p>Olá <b>{nome}</b>,</p>
         <p>Obrigado por se cadastrar no <b>PETDor</b>! Para ativar sua conta, clique no botão abaixo:</p>
+
         <p style="text-align:center;margin-top:30px;">
             <a href="{link}" 
-               style="background:#1a73e8;color:wh
+               style="background:#1a73e8;color:white;padding:15px 25px;
+                      text-decoration:none;border-radius:8px;font-size:16px;">
+                Confirmar Cadastro
+            </a>
+        </p>
+
+        <p style="margin-top:25px;">Ou copie e cole o link no navegador:</p>
+        <p>{link}</p>
+    """
+
+    html = _template_base("Confirmação de Cadastro", corpo)
+    return _enviar_email(email, "Confirme seu cadastro - PETDor", html)
+
+
+# ===============================
+# E-MAIL DE RESET DE SENHA
+# ===============================
+def enviar_email_reset(email, token):
+    link = f"https://petdor.streamlit.app/reset_senha?token={token}"
+
+    corpo = f"""
+        <p>Você solicitou a redefinição da sua senha no <b>PETDor</b>.</p>
+        <p>Clique no botão abaixo para redefinir:</p>
+
+        <p style="text-align:center;margin-top:30px;">
+            <a href="{link}"
+               style="background:#e37400;color:white;padding:15px 25px;
+                      text-decoration:none;border-radius:8px;font-size:16px;">
+                Redefinir Senha
+            </a>
+        </p>
+
+        <p style="margin-top:25px;">Ou copie e cole o link no navegador:</p>
+        <p>{link}</p>
+    """
+
+    html = _template_base("Redefinição de Senha", corpo)
+    return _enviar_email(email, "Redefinir senha - PETDor", html)
