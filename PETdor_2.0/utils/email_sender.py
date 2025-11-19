@@ -13,7 +13,7 @@ import smtplib
 import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Optional
+from typing import Optional # Importação adicionada para 'Optional'
 
 from dotenv import load_dotenv
 
@@ -33,7 +33,7 @@ def _enviar_email(
     destinatario: str,
     assunto: str,
     corpo_html: str,
-    corpo_texto: Optional[str] = None,
+    corpo_texto: Optional[str] = None, # Usando Optional[str]
 ) -> bool:
     """
     Função interna genérica para enviar e-mail via SMTP.
@@ -167,5 +167,3 @@ Equipe PETDor
 """.strip()
 
     return _enviar_email(destinatario, assunto, corpo_html, corpo_texto)
-
-
