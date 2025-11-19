@@ -1,5 +1,12 @@
 # PetDor/pages/login.py
 import streamlit as st
+
+def render():
+    st.header("🔐 Login (página stub)")
+    st.info("Implementação final da página de login virá após validar imports.")
+    st.write("Use o menu lateral para navegar.")
+
+import streamlit as st
 from auth.user import autenticar_usuario, buscar_usuario_por_id
 
 def app():
@@ -21,3 +28,4 @@ def app():
         if st.button("Sair"):
             del st.session_state["user_id"]
             st.experimental_rerun()
+
