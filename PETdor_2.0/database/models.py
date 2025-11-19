@@ -1,6 +1,5 @@
 import sqlite3
-from database.connection import conectar_db
-
+from .connection import conectar_db # Já está com importação relativa, ótimo!
 
 # ==========================================================
 # USUÁRIOS
@@ -14,7 +13,6 @@ def buscar_usuario_por_email(email: str):
         FROM usuarios
         WHERE email = ?
     """, (email,))
-
     row = cursor.fetchone()
     conn.close()
 
@@ -28,9 +26,7 @@ def buscar_usuario_por_email(email: str):
             "pais": row[5],
             "email_confirmado": row[6],
         }
-
     return None
-
 
 
 # ==========================================================
@@ -45,7 +41,6 @@ def buscar_pet_por_id(pet_id: int):
         FROM pets
         WHERE id = ?
     """, (pet_id,))
-
     row = cursor.fetchone()
     conn.close()
 
@@ -58,5 +53,4 @@ def buscar_pet_por_id(pet_id: int):
             "peso": row[4],
             "tutor_id": row[5],
         }
-
     return None
