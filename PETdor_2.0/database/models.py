@@ -1,53 +1,62 @@
-from .connection import conectar_db
-import logging
+import sqlite3
+from database.connection import conectar_db
 
-logger = logging.getLogger(__name__)
 
-def buscar_usuario_por_id(usuario_id):
-    try:
-        conn = conectar_db()
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT id, nome, email, data_criacao, ativo, is_admin
-            FROM usuarios
-            WHERE id = ?
-        """, (usuario_id,))
-        row = cursor.fetchone()
-        conn.close()
-        if row:
-            return {
-                "id": row["id"],
-                "nome": row["nome"],
-                "email": row["email"],
-                "data_criacao": row["data_criacao"],
-                "ativo": bool(row["ativo"]),
-                "is_admin": bool(row["is_admin"])
-            }
-        return None
-    except Exception as e:
-        logger.error(f"Erro ao buscar usuario: {e}")
-        return None
+# ==========================================================
+# USUÁRIOS
+# ==========================================================
+def buscar_usuario_por_email(email: str):
+    conn = conectar_db()
+    cursor = conn.cursor()
 
-def buscar_usuario_por_email(email):
-    try:
-        conn = conectar_db()
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT id, nome, email, ativo, is_admin
-            FROM usuarios
-            WHERE email = ?
-        """, (email.lower().strip(),))
-        row = cursor.fetchone()
-        conn.close()
-        if row:
-            return {
-                "id": row["id"],
-                "nome": row["nome"],
-                "email": row["email"],
-                "ativo": bool(row["ativo"]),
-                "is_admin": bool(row["is_admin"])
-            }
-        return None
-    except Exception as e:
-        logger.error(f"Erro ao buscar usuario por email: {e}")
-        return None
+    cursor.execute("""
+        SELECT id, nome, email, senha, tipo_usuario, pais, email_confirmado
+        FROM usuarios
+        WHERE email = ?
+    """, (email,))
+
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        return {
+            "id": row[0],
+            "nome": row[1],
+            "email": row[2],
+            "senha": row[3],
+            "tipo_usuario": row[4],
+            "pais": row[5],
+            "email_confirmado": row[6],
+        }
+
+    return None
+
+
+
+# ==========================================================
+# PETS
+# ==========================================================
+def buscar_pet_por_id(pet_id: int):
+    conn = conectar_db()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        SELECT id, nome, especie, idade, peso, tutor_id
+        FROM pets
+        WHERE id = ?
+    """, (pet_id,))
+
+    row = cursor.fetchone()
+    conn.close()
+
+    if row:
+        return {
+            "id": row[0],
+            "nome": row[1],
+            "especie": row[2],
+            "idade": row[3],
+            "peso": row[4],
+            "tutor_id": row[5],
+        }
+
+    return None
