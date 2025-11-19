@@ -6,7 +6,7 @@ Escala: 0 a 7 (baseada em escalas de dor felina).
 """
 from .index import EspecieConfig, Pergunta # Importa de especies.index agora!
 
-CONFIG_GATOS = EspecieConfig(
+CONFIG_GATO = EspecieConfig( # <-- Nome da variável ajustado para CONFIG_GATO
     nome="Gato",
     especie_id="gato",
     descricao="Avaliação de dor em gatos - Escala de 0 (ausente) a 7 (severa).",
