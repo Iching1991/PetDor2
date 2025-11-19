@@ -8,7 +8,7 @@ from especies.index import EspecieConfig, Pergunta
 
 CONFIG_PORQUINHO = EspecieConfig(
     nome="Porquinho-da-Índia",
-    especie_id="porquinho", # <-- CORREÇÃO: Adicionado o campo especie_id aqui!
+    especie_id="porquinho", # <-- Adicionado o campo especie_id aqui!
     descricao="Avaliação de dor em porquinhos-da-índia — Escala de 0 (nunca) a 7 (sempre).",
     opcoes_escala=[
         "0 - Nunca", "1 - Raramente", "2 - Às vezes", "3 - Frequentemente",
@@ -31,5 +31,3 @@ CONFIG_PORQUINHO = EspecieConfig(
         Pergunta(texto="A respiração parece mais rápida ou difícil", invertida=False, peso=1.0),
     ]
 )
-
-
