@@ -8,7 +8,7 @@ from especies.index import EspecieConfig, Pergunta
 
 CONFIG_AVES = EspecieConfig(
     nome="Aves",
-    especie_id="aves", # <-- CORREÇÃO: Adicionado o campo especie_id aqui!
+    especie_id="aves", # <-- Adicionado o campo especie_id aqui!
     descricao="Avaliação de dor em aves — Escala de 0 (nunca) a 7 (sempre).",
     opcoes_escala=[
         "0 - Nunca", "1 - Raramente", "2 - Às vezes", "3 - Frequentemente",
