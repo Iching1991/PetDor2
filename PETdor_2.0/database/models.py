@@ -1,8 +1,8 @@
 # PETdor_2.0/database/models.py
 
 import sqlite3
-from dataclasses import dataclass # <-- Importa dataclass
-from typing import Optional # <-- Importa Optional para tipos opcionais
+from dataclasses import dataclass
+from typing import Optional
 from .connection import conectar_db
 
 # ==========================================================
@@ -20,18 +20,18 @@ class Usuario:
     email_confirmado: bool = False
 
 @dataclass
-class Pet: # <-- NOVA DATACLASS ADICIONADA AQUI!
+class Pet: # <-- CORREÇÃO: Campos reordenados aqui!
     id: int
     nome: str
     especie: str
-    idade: Optional[int] = None # Assumindo que idade pode ser opcional
+    tutor_id: int               # <-- Campo obrigatório movido para antes dos opcionais
+    idade: Optional[int] = None
     peso: Optional[float] = None
-    tutor_id: int
 
 # ==========================================================
 # USUÁRIOS (Funções de Acesso ao Banco)
 # ==========================================================
-def buscar_usuario_por_email(email: str) -> Optional[Usuario]: # <-- Adicionado tipo de retorno
+def buscar_usuario_por_email(email: str) -> Optional[Usuario]:
     conn = conectar_db()
     cursor = conn.cursor()
     cursor.execute("""
@@ -42,7 +42,6 @@ def buscar_usuario_por_email(email: str) -> Optional[Usuario]: # <-- Adicionado 
     row = cursor.fetchone()
     conn.close()
     if row:
-        # Retorna uma instância da dataclass Usuario
         return Usuario(
             id=row[0],
             nome=row[1],
@@ -50,14 +49,14 @@ def buscar_usuario_por_email(email: str) -> Optional[Usuario]: # <-- Adicionado 
             senha=row[3],
             tipo_usuario=row[4],
             pais=row[5],
-            email_confirmado=bool(row[6]), # Converte para booleano
+            email_confirmado=bool(row[6]),
         )
     return None
 
 # ==========================================================
 # PETS (Funções de Acesso ao Banco)
 # ==========================================================
-def buscar_pet_por_id(pet_id: int) -> Optional[Pet]: # <-- Adicionado tipo de retorno
+def buscar_pet_por_id(pet_id: int) -> Optional[Pet]:
     conn = conectar_db()
     cursor = conn.cursor()
     cursor.execute("""
@@ -68,7 +67,6 @@ def buscar_pet_por_id(pet_id: int) -> Optional[Pet]: # <-- Adicionado tipo de re
     row = cursor.fetchone()
     conn.close()
     if row:
-        # Retorna uma instância da dataclass Pet
         return Pet(
             id=row[0],
             nome=row[1],
@@ -79,5 +77,4 @@ def buscar_pet_por_id(pet_id: int) -> Optional[Pet]: # <-- Adicionado tipo de re
         )
     return None
 
-# Adicionei também uma dataclass Usuario e ajustei as funções para retornarem instâncias das dataclasses,
-# o que é uma boa prática para trabalhar com modelos de dados.
+
