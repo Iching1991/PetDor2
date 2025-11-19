@@ -7,7 +7,6 @@ from .connection import conectar_db # Importação relativa, mais robusta dentro
 def criar_tabelas():
     conn = conectar_db()
     cursor = conn.cursor()
-
     # -------------------------------
     # Tabela de usuários
     # -------------------------------
@@ -16,14 +15,14 @@ def criar_tabelas():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL,
             email TEXT UNIQUE NOT NULL,
-            senha TEXT NOT NULL,
+            senha_hash TEXT NOT NULL,              -- <--- CORRIGIDO: de 'senha' para 'senha_hash'
             tipo_usuario TEXT NOT NULL,              -- tutor, veterinario, clinica
             pais TEXT,
             email_confirmado INTEGER DEFAULT 0,
-            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            ativo INTEGER DEFAULT 1                  -- Adicionado: flag para desativar usuário
         );
     """)
-
     # -------------------------------
     # Tokens de confirmação de e-mail
     # -------------------------------
@@ -37,7 +36,6 @@ def criar_tabelas():
             FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
         );
     """)
-
     # -------------------------------
     # Tokens de recuperação de senha
     # -------------------------------
@@ -51,7 +49,6 @@ def criar_tabelas():
             FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
         );
     """)
-
     # -------------------------------
     # Tabela de Pets
     # -------------------------------
@@ -67,7 +64,6 @@ def criar_tabelas():
             FOREIGN KEY (tutor_id) REFERENCES usuarios(id)
         );
     """)
-
     # -------------------------------
     # Tabela de Avaliações
     # -------------------------------
@@ -84,11 +80,9 @@ def criar_tabelas():
             FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
         );
     """)
-
     conn.commit()
     conn.close()
     print("✔ Banco atualizado: Todas as tabelas foram criadas com sucesso.")
-
 
 # ==========================================================
 # Migração completa (ponto único de entrada para migrações)
@@ -96,16 +90,14 @@ def criar_tabelas():
 def migrar_banco_completo():
     """
     Executa todas as migrações necessárias para deixar o banco atualizado.
-
     No momento:
     - Cria as tabelas, se não existirem (criar_tabelas).
-
     Futuras migrações (ex: novas colunas, flags de desativação, etc.)
     podem ser adicionadas aqui em sequência.
     """
+    resetar_banco() # <--- ADICIONADO: Reseta o banco para garantir a nova estrutura
     criar_tabelas()
     print("✔ Migração completa executada (criação/atualização de tabelas).")
-
 
 # ==========================================================
 # Utilitário opcional para resetar o banco (apenas dev)
@@ -113,13 +105,11 @@ def migrar_banco_completo():
 def resetar_banco():
     conn = conectar_db()
     cursor = conn.cursor()
-
     cursor.execute("DROP TABLE IF EXISTS avaliacoes")
     cursor.execute("DROP TABLE IF EXISTS pets")
     cursor.execute("DROP TABLE IF EXISTS password_resets")
     cursor.execute("DROP TABLE IF EXISTS email_confirmacoes")
     cursor.execute("DROP TABLE IF EXISTS usuarios")
-
     conn.commit()
     conn.close()
     print("⚠ Banco de dados resetado (modo DEV).")
