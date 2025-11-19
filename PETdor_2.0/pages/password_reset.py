@@ -8,7 +8,6 @@ import uuid
 from datetime import datetime, timedelta
 import logging
 import bcrypt
-
 from database.connection import conectar_db
 # Importa buscar_usuario_por_email do módulo models do pacote database
 # ou, se você moveu para auth.user, importe de lá.
@@ -122,4 +121,5 @@ def redefinir_senha(usuario_id: int, nova_senha: str, token_utilizado: str) -> b
     except Exception as e:
         logger.exception(f"Erro ao redefinir senha para usuário {usuario_id} com token {token_utilizado}")
         return False
+
 
