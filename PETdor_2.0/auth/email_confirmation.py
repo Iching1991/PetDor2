@@ -86,4 +86,3 @@ def reenviar_email_confirmacao(email: str) -> bool:
     except Exception as e:
         logger.error(f"Erro ao reenviar e-mail de confirmação para {email}: {e}", exc_info=True)
         return False
-
