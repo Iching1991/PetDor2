@@ -1,30 +1,30 @@
 """
 Pacote de acesso ao banco de dados da aplicação PETDor.
 
-Responsável por:
-- Conexão com o banco SQLite (módulo connection)
-- Criação e migração das tabelas (módulo migration)
-- Funções de acesso a dados (módulo models)
+Este módulo inicializa o pacote 'database', tornando seus submódulos
+(connection, migration, models) acessíveis.
+
+Para evitar ciclos de importação, funções específicas como 'criar_tabelas'
+não são importadas diretamente para o namespace do pacote aqui.
+Em vez disso, importe-as diretamente do módulo 'database.migration'
+onde forem necessárias (ex: no streamlit_app.py).
 """
 
-# Importa os módulos para que possam ser acessados via database.connection, database.migration, etc.
+# Importa os submódulos para que possam ser acessados via database.connection, database.migration, etc.
 from . import connection
 from . import migration
 from . import models
 
-# Expõe as funções e módulos que você deseja que sejam facilmente acessíveis
-# diretamente do pacote 'database'.
-# Note que estamos expondo as funções 'criar_tabelas' e 'migrar_banco_completo'
-# diretamente do módulo 'migration' para o namespace do pacote 'database'.
-# Isso é o que você tinha originalmente e o que vamos tentar fazer funcionar.
-from .connection import conectar_db
-from .migration import criar_tabelas, migrar_banco_completo
-
+# Exponha apenas o que é estritamente necessário ou que não cause ciclos.
+# Neste caso, estamos expondo os módulos em si, para que você possa usar
+# database.connection.conectar_db, database.migration.criar_tabelas, etc.
 __all__ = [
     "connection",
     "migration",
     "models",
-    "conectar_db",
-    "criar_tabelas",
-    "migrar_banco_completo",
 ]
+
+# Se você realmente precisar de conectar_db diretamente como database.conectar_db,
+# pode adicioná-lo aqui, pois 'connection' não depende de 'migration' ou 'models'.
+from .connection import conectar_db
+__all__.append("conectar_db")
