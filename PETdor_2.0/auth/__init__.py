@@ -4,7 +4,7 @@
 Módulo de inicialização do pacote 'auth'.
 Expõe funcionalidades de autenticação e gerenciamento de usuários.
 """
-# Importa os submódulos para que possam ser acessados via auth.user, auth.password_reset, etc.
+# Importa os submódulos para que possam ser acessados via auth.user, auth.password_reset.
 # NUNCA importe funções específicas aqui se elas podem causar um ciclo.
 # Apenas importe os módulos.
 from . import user
