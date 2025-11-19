@@ -6,10 +6,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 ROOT_DIR = Path(__file__).resolve().parent
-DATABASE_PATH = str(ROOT_DIR / "petdor.db")
+# Ajustado para usar "petdor.br" conforme sua indicação
+DATABASE_PATH = str(ROOT_DIR / "petdor.br")
+
 
 def conectar_db():
-    """Conecta ao banco SQLite, criando diretório se necessário"""
+    """Conecta ao banco SQLite, criando diretório se necessário."""
     try:
         db_dir = os.path.dirname(DATABASE_PATH)
         if db_dir and not os.path.exists(db_dir):
