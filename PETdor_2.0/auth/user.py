@@ -3,7 +3,7 @@ import streamlit as st
 import logging
 from datetime import datetime
 from database.connection import conectar_db # Importa a função inteligente
-from auth.security import hash_password, generate_email_token, verify_email_token
+from .security import hash_password, generate_email_token, verify_email_token
 from email_sender import send_confirmation_email
 import uuid
 
@@ -218,3 +218,4 @@ def atualizar_tipo_usuario(user_id, tipo_usuario):
     finally:
         if conn:
             conn.close()
+
