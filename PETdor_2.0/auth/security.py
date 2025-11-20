@@ -6,7 +6,7 @@ Inclui hashing de senha, verificação e geração de tokens
 import bcrypt
 from datetime import datetime, timedelta
 import logging
-import uuid # Adicionei uuid aqui, caso generate_email_token precise dele
+import uuid # Adicionado para gerar tokens únicos
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 # -------------------------------
 def hash_password(senha: str) -> str: # RENOMEADO de gerar_hash_senha
     """
-    Gera um hash seguro para a senha
+    Gera um hash seguro para a senha.
     """
     try:
         hash_senha = bcrypt.hashpw(senha.encode('utf-8'), bcrypt.gensalt())
@@ -25,11 +25,11 @@ def hash_password(senha: str) -> str: # RENOMEADO de gerar_hash_senha
         raise
 
 # -------------------------------
-# VALIDAR SENHA
+# VERIFICAR SENHA
 # -------------------------------
 def verify_password(senha: str, hashed_password: str) -> bool: # RENOMEADO de verificar_senha
     """
-    Verifica se a senha corresponde ao hash
+    Verifica se a senha fornecida corresponde ao hash armazenado.
     """
     try:
         return bcrypt.checkpw(senha.encode('utf-8'), hashed_password.encode('utf-8'))
@@ -38,27 +38,26 @@ def verify_password(senha: str, hashed_password: str) -> bool: # RENOMEADO de ve
         return False
 
 # -------------------------------
-# GERAR TOKEN DE E-MAIL
+# GERAR TOKEN DE CONFIRMAÇÃO DE E-MAIL
 # -------------------------------
-def generate_email_token() -> str: # RENOMEADO de gerar_token, e simplificado para email
+def generate_email_token() -> str: # RENOMEADO de gerar_token e adaptado para e-mail
     """
-    Gera um token único para confirmação de e-mail.
+    Gera um token único para confirmação de e-mail usando UUID.
     """
-    return str(uuid.uuid4()) # Usando uuid para um token simples e único
+    return str(uuid.uuid4())
 
 # -------------------------------
-# VALIDAR TOKEN DE E-MAIL (se precisar de verificação de expiração)
+# VERIFICAR TOKEN DE E-MAIL (SIMPLIFICADO)
 # -------------------------------
-# Se você tiver um token que expira, pode usar uma função como esta.
-# No seu user.py, você importa verify_email_token, então vamos criar uma.
 def verify_email_token(token: str) -> bool:
     """
-    Verifica a validade de um token de e-mail.
-    (Atualmente, apenas verifica se não é nulo/vazio. A lógica de expiração
-    será tratada no banco de dados, se o token tiver um campo de expiração lá.)
+    Verifica a validade básica de um token de e-mail.
+    (A lógica de expiração e uso único é geralmente tratada no banco de dados).
     """
-    return bool(token) # Um token UUID é sempre "válido" até ser usado ou expirado no DB
+    return bool(token) # Um token UUID é "válido" se não for nulo/vazio.
+                       # A validação real (se já foi usado, se expirou)
+                       # é feita na função confirmar_email no user.py.
 
-# Nota: A função 'token_valido' e 'gerar_token' com expiração foram removidas/adaptadas
-# para focar nos nomes que você importa e na funcionalidade de e-mail.
-# Se precisar de tokens com expiração para outras finalidades, podemos recriar.
+# As funções 'gerar_token' e 'token_valido' originais foram adaptadas/removidas
+# para corresponder às importações de 'user.py'. Se precisar de tokens com
+# expiração para outras finalidades, podemos recriá-las.
