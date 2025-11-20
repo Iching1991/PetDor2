@@ -1,258 +1,220 @@
-# PetDor/auth/user.py
-"""
-Gerenciamento de usuários: cadastro, autenticação, atualização, confirmação de e-mail.
-"""
-
-import uuid
-import bcrypt
+# PETdor_2.0/auth/user.py
+import streamlit as st
 import logging
 from datetime import datetime
-from database.connection import conectar_db
-from utils.validators import validar_email, validar_senha
-from utils.email_sender import enviar_email_confirmacao
+from database.connection import conectar_db # Importa a função inteligente
+from auth.security import hash_password, generate_email_token, verify_email_token
+from email_sender import send_confirmation_email
+import uuid
 
 logger = logging.getLogger(__name__)
 
-# -------------------------
-# Cadastrar usuário
-# -------------------------
-def cadastrar_usuario(nome: str, email: str, senha: str, confirmar: str,
-                      tipo_usuario: str = "Tutor", pais: str = "Brasil"):
+def criar_tabelas_se_nao_existir():
+    """Cria a tabela de usuários se não existir."""
+    conn = conectar_db()
+    cur = conn.cursor()
+    # Note: O script de criação de tabelas já foi rodado no Supabase.
+    # Esta função é mais para garantir compatibilidade local ou para novas tabelas.
+    # Para o Supabase, as tabelas já existem.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nome TEXT NOT NULL,
+            email TEXT NOT NULL UNIQUE,
+            senha_hash TEXT NOT NULL,
+            tipo_usuario TEXT NOT NULL DEFAULT 'Tutor',
+            pais TEXT NOT NULL DEFAULT 'Brasil',
+            email_confirm_token TEXT UNIQUE,
+            email_confirmado BOOLEAN NOT NULL DEFAULT FALSE,
+            ativo BOOLEAN NOT NULL DEFAULT TRUE,
+            data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+    conn.commit()
+    conn.close()
+
+def cadastrar_usuario(nome, email, senha, tipo_usuario, pais):
+    """
+    Cadastra um novo usuário no banco de dados.
+    Retorna True e mensagem de sucesso, ou False e mensagem de erro.
+    """
+    conn = None
     try:
-        nome = nome.strip()
-        email = email.strip().lower()
-
-        if not nome or not email or not senha:
-            return False, "Preencha todos os campos obrigatórios."
-
-        if senha != confirmar:
-            return False, "As senhas não conferem."
-
-        if not validar_email(email):
-            return False, "E-mail inválido."
-
-        # validação de senha (opcional — se quiser regras estritas)
-        # if not validar_senha(senha):
-        #     return False, "Senha não atende os requisitos de segurança."
-
         conn = conectar_db()
         cur = conn.cursor()
 
-        # verifica duplicado
-        cur.execute("SELECT id FROM usuarios WHERE email = ?", (email,))
-        if cur.fetchone():
-            conn.close()
-            return False, "E-mail já cadastrado."
+        senha_hash = hash_password(senha)
+        token = generate_email_token()
 
-        senha_hash = bcrypt.hashpw(senha.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-
-        # gera token de confirmação
-        token = str(uuid.uuid4())
-
+        # Usar %s para PostgreSQL e 0 para FALSE (ou FALSE diretamente)
         cur.execute("""
             INSERT INTO usuarios (nome, email, senha_hash, tipo_usuario, pais, email_confirm_token, email_confirmado)
-            VALUES (?, ?, ?, ?, ?, ?, 0)
+            VALUES (%s, %s, %s, %s, %s, %s, FALSE)
         """, (nome, email, senha_hash, tipo_usuario, pais, token))
 
         conn.commit()
-        user_id = cur.lastrowid
-        conn.close()
+        logger.info(f"Usuário {email} cadastrado com sucesso.")
 
-        # tenta enviar e-mail de confirmação (não crítico)
-        try:
-            enviar_email_confirmacao(email, nome, token)
-        except Exception as e:
-            logger.warning(f"Falha ao enviar email de confirmação para {email}: {e}")
+        # Enviar e-mail de confirmação
+        send_confirmation_email(email, nome, token)
 
-        return True, "Conta criada com sucesso. Verifique seu e-mail para confirmar."
-
+        return True, "Cadastro realizado com sucesso! Verifique seu e-mail para confirmar a conta."
     except Exception as e:
-        logger.exception("Erro ao cadastrar usuário")
-        return False, f"Erro ao criar conta: {e}"
+        if conn:
+            conn.rollback()
+        logger.error(f"Erro ao cadastrar usuário: {e}")
+        # Se for erro de UNIQUE constraint, dar uma mensagem mais amigável
+        if "UNIQUE constraint failed: usuarios.email" in str(e) or "duplicate key value violates unique constraint" in str(e):
+            return False, "Este e-mail já está cadastrado. Tente fazer login ou redefinir a senha."
+        return False, f"Erro ao cadastrar usuário: {e}"
+    finally:
+        if conn:
+            conn.close()
 
-# -------------------------
-# Autenticar usuário
-# -------------------------
-def autenticar_usuario(email: str, senha: str):
+def verificar_credenciais(email, senha):
+    """Verifica as credenciais do usuário."""
+    conn = None
     try:
-        if not email or not senha:
-            return False, "E-mail e senha são obrigatórios.", None
-
-        email = email.strip().lower()
         conn = conectar_db()
         cur = conn.cursor()
+        # Usar %s para PostgreSQL
+        cur.execute("SELECT id, nome, email, senha_hash, tipo_usuario, email_confirmado, ativo FROM usuarios WHERE email = %s", (email,))
+        usuario = cur.fetchone()
 
-        cur.execute("SELECT id, senha_hash, ativo, email_confirmado FROM usuarios WHERE email = ?", (email,))
-        row = cur.fetchone()
-        conn.close()
-
-        if not row:
-            return False, "Usuário não encontrado.", None
-
-        user_id, senha_hash, ativo, email_confirmado = row
-
-        if not ativo:
-            return False, "Conta desativada.", None
-
-        # opcional: exigir confirmação de e-mail
-        # if not email_confirmado:
-        #     return False, "Confirme seu e-mail antes de entrar.", None
-
-        if bcrypt.checkpw(senha.encode("utf-8"), senha_hash.encode("utf-8")):
-            return True, "Login efetuado com sucesso.", user_id
+        if usuario and usuario['ativo'] and usuario['email_confirmado'] and hash_password(senha, hashed_password=usuario['senha_hash']):
+            logger.info(f"Login bem-sucedido para {email}")
+            return True, usuario
+        elif usuario and not usuario['email_confirmado']:
+            return False, "Sua conta ainda não foi confirmada. Verifique seu e-mail."
+        elif usuario and not usuario['ativo']:
+            return False, "Sua conta está inativa. Entre em contato com o suporte."
         else:
-            return False, "E-mail ou senha incorretos.", None
-
+            logger.warning(f"Falha no login para {email}")
+            return False, "E-mail ou senha incorretos."
     except Exception as e:
-        logger.exception("Erro na autenticação")
-        return False, "Erro ao autenticar.", None
-
-# -------------------------
-# Buscar usuário
-# -------------------------
-def buscar_usuario_por_id(user_id: int):
-    try:
-        conn = conectar_db()
-        cur = conn.cursor()
-        cur.execute("SELECT id, nome, email, tipo_usuario, pais, email_confirmado, ativo FROM usuarios WHERE id = ?", (user_id,))
-        row = cur.fetchone()
-        conn.close()
-        if not row:
-            return None
-        return {
-            "id": row[0],
-            "nome": row[1],
-            "email": row[2],
-            "tipo_usuario": row[3],
-            "pais": row[4],
-            "email_confirmado": bool(row[5]),
-            "ativo": bool(row[6])
-        }
-    except Exception as e:
-        logger.exception("Erro ao buscar usuário por id")
-        return None
-
-def buscar_usuario_por_email(email: str):
-    try:
-        email = email.strip().lower()
-        conn = conectar_db()
-        cur = conn.cursor()
-        cur.execute("SELECT id, nome, email, tipo_usuario, pais, email_confirmado, ativo FROM usuarios WHERE email = ?", (email,))
-        row = cur.fetchone()
-        conn.close()
-        if not row:
-            return None
-        return {
-            "id": row[0],
-            "nome": row[1],
-            "email": row[2],
-            "tipo_usuario": row[3],
-            "pais": row[4],
-            "email_confirmado": bool(row[5]),
-            "ativo": bool(row[6])
-        }
-    except Exception as e:
-        logger.exception("Erro ao buscar usuário por email")
-        return None
-
-# -------------------------
-# Atualizar usuário
-# -------------------------
-def atualizar_usuario(user_id: int, nome: str = None, email: str = None, tipo_usuario: str = None, pais: str = None):
-    try:
-        conn = conectar_db()
-        cur = conn.cursor()
-        updates = []
-        params = []
-
-        if nome:
-            updates.append("nome = ?")
-            params.append(nome.strip())
-        if email:
-            updates.append("email = ?")
-            params.append(email.strip().lower())
-        if tipo_usuario:
-            updates.append("tipo_usuario = ?")
-            params.append(tipo_usuario)
-        if pais:
-            updates.append("pais = ?")
-            params.append(pais)
-
-        if not updates:
+        logger.error(f"Erro ao verificar credenciais: {e}")
+        return False, f"Erro interno ao verificar credenciais: {e}"
+    finally:
+        if conn:
             conn.close()
-            return True
 
-        params.append(user_id)
-        query = f"UPDATE usuarios SET {', '.join(updates)} WHERE id = ?"
-        cur.execute(query, tuple(params))
-        conn.commit()
-        conn.close()
-        return True
-    except Exception as e:
-        logger.exception("Erro ao atualizar usuário")
-        return False
-
-# -------------------------
-# Alterar senha (direto)
-# -------------------------
-def alterar_senha(user_id: int, nova_senha: str):
-    try:
-        senha_hash = bcrypt.hashpw(nova_senha.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
-        conn = conectar_db()
-        cur = conn.cursor()
-        cur.execute("UPDATE usuarios SET senha_hash = ? WHERE id = ?", (senha_hash, user_id))
-        conn.commit()
-        conn.close()
-        return True, "Senha alterada com sucesso."
-    except Exception as e:
-        logger.exception("Erro ao alterar senha")
-        return False, f"Erro ao alterar senha: {e}"
-
-# -------------------------
-# Deletar / desativar usuário
-# -------------------------
-def deletar_usuario(user_id: int):
+def buscar_usuario_por_email(email):
+    """Busca um usuário pelo e-mail."""
+    conn = None
     try:
         conn = conectar_db()
         cur = conn.cursor()
-        cur.execute("UPDATE usuarios SET ativo = 0 WHERE id = ?", (user_id,))
-        conn.commit()
-        conn.close()
-        return True
+        cur.execute("SELECT id, nome, email, senha_hash, tipo_usuario, email_confirmado, ativo FROM usuarios WHERE email = %s", (email,))
+        usuario = cur.fetchone()
+        return usuario
     except Exception as e:
-        logger.exception("Erro ao desativar usuário")
-        return False
-
-# -------------------------
-# Token de confirmação de e-mail
-# -------------------------
-def gerar_token_confirmacao_para_usuario(user_id: int):
-    try:
-        token = str(uuid.uuid4())
-        conn = conectar_db()
-        cur = conn.cursor()
-        cur.execute("UPDATE usuarios SET email_confirm_token = ? WHERE id = ?", (token, user_id))
-        conn.commit()
-        conn.close()
-        return token
-    except Exception as e:
-        logger.exception("Erro ao gerar token de confirmação")
+        logger.error(f"Erro ao buscar usuário por e-mail: {e}")
         return None
+    finally:
+        if conn:
+            conn.close()
 
-def confirmar_email(token: str):
+def confirmar_email(token):
+    """Confirma o e-mail do usuário usando o token."""
+    conn = None
     try:
         conn = conectar_db()
         cur = conn.cursor()
-        cur.execute("SELECT id FROM usuarios WHERE email_confirm_token = ?", (token,))
-        row = cur.fetchone()
-        if not row:
-            conn.close()
-            return False
-        user_id = row[0]
-        cur.execute("UPDATE usuarios SET email_confirmado = 1, email_confirm_token = NULL WHERE id = ?", (user_id,))
-        conn.commit()
-        conn.close()
-        return True
+        # Primeiro, verifica se o token existe e não está confirmado
+        cur.execute("SELECT id FROM usuarios WHERE email_confirm_token = %s AND email_confirmado = FALSE", (token,))
+        usuario = cur.fetchone()
+
+        if usuario:
+            # Atualiza o status de confirmação e remove o token
+            cur.execute("""
+                UPDATE usuarios
+                SET email_confirmado = TRUE, email_confirm_token = NULL
+                WHERE id = %s
+            """, (usuario['id'],))
+            conn.commit()
+            logger.info(f"E-mail confirmado para o usuário ID: {usuario['id']}")
+            return True, "Seu e-mail foi confirmado com sucesso! Você já pode fazer login."
+        else:
+            return False, "Token de confirmação inválido ou já utilizado."
     except Exception as e:
-        logger.exception("Erro ao confirmar e-mail")
-        return False
+        if conn:
+            conn.rollback()
+        logger.error(f"Erro ao confirmar e-mail: {e}")
+        return False, f"Erro interno ao confirmar e-mail: {e}"
+    finally:
+        if conn:
+            conn.close()
+
+def redefinir_senha(email, nova_senha):
+    """Redefine a senha de um usuário."""
+    conn = None
+    try:
+        conn = conectar_db()
+        cur = conn.cursor()
+        senha_hash = hash_password(nova_senha)
+        cur.execute("UPDATE usuarios SET senha_hash = %s WHERE email = %s", (senha_hash, email))
+        conn.commit()
+        logger.info(f"Senha redefinida para {email}")
+        return True, "Senha redefinida com sucesso."
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Erro ao redefinir senha para {email}: {e}")
+        return False, f"Erro ao redefinir senha: {e}"
+    finally:
+        if conn:
+            conn.close()
+
+def buscar_todos_usuarios():
+    """Retorna todos os usuários (para fins administrativos)."""
+    conn = None
+    try:
+        conn = conectar_db()
+        cur = conn.cursor()
+        cur.execute("SELECT id, nome, email, tipo_usuario, pais, email_confirmado, ativo, data_cadastro FROM usuarios ORDER BY data_cadastro DESC")
+        usuarios = cur.fetchall()
+        return usuarios
+    except Exception as e:
+        logger.error(f"Erro ao buscar todos os usuários: {e}")
+        return []
+    finally:
+        if conn:
+            conn.close()
+
+def atualizar_status_usuario(user_id, ativo):
+    """Ativa ou desativa um usuário."""
+    conn = None
+    try:
+        conn = conectar_db()
+        cur = conn.cursor()
+        cur.execute("UPDATE usuarios SET ativo = %s WHERE id = %s", (ativo, user_id))
+        conn.commit()
+        logger.info(f"Status do usuário ID {user_id} atualizado para ativo={ativo}")
+        return True, "Status atualizado com sucesso."
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Erro ao atualizar status do usuário ID {user_id}: {e}")
+        return False, f"Erro ao atualizar status: {e}"
+    finally:
+        if conn:
+            conn.close()
+
+def atualizar_tipo_usuario(user_id, tipo_usuario):
+    """Atualiza o tipo de usuário."""
+    conn = None
+    try:
+        conn = conectar_db()
+        cur = conn.cursor()
+        cur.execute("UPDATE usuarios SET tipo_usuario = %s WHERE id = %s", (tipo_usuario, user_id))
+        conn.commit()
+        logger.info(f"Tipo do usuário ID {user_id} atualizado para {tipo_usuario}")
+        return True, "Tipo de usuário atualizado com sucesso."
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Erro ao atualizar tipo do usuário ID {user_id}: {e}")
+        return False, f"Erro ao atualizar tipo de usuário: {e}"
+    finally:
+        if conn:
+            conn.close()
