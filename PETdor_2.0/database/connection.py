@@ -5,6 +5,7 @@ Conexão inteligente: PostgreSQL (Supabase com pg8000) na nuvem ou SQLite local.
 import os
 import sqlite3
 import logging
+from collections import namedtuple
 
 # Para PostgreSQL (Supabase)
 try:
@@ -16,6 +17,40 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# --- Cursor para retornar resultados como dicionários (compatível com SQLite e pg8000) ---
+class DictCursor:
+    """Cursor que retorna linhas como dicionários."""
+    def __init__(self, cursor):
+        self._cursor = cursor
+        self._description = None # Para pg8000
+
+    @property
+    def description(self):
+        if self._description is None:
+            # Para pg8000, description pode ser None até a primeira execução
+            if self._cursor.description:
+                self._description = [d[0] for d in self._cursor.description]
+        return self._description
+
+    def fetchone(self):
+        row = self._cursor.fetchone()
+        if row is None:
+            return None
+        if self.description:
+            return dict(zip(self.description, row))
+        return row # Fallback se description não estiver disponível
+
+    def fetchall(self):
+        rows = self._cursor.fetchall()
+        if not rows:
+            return []
+        if self.description:
+            return [dict(zip(self.description, row)) for row in rows]
+        return rows # Fallback
+
+    def __getattr__(self, name):
+        return getattr(self._cursor, name)
+
 # ------------- SQLite (desenvolvimento local) -------------
 def conectar_db_sqlite():
     """Conecta ao SQLite local (petdor.db)."""
@@ -23,7 +58,8 @@ def conectar_db_sqlite():
     os.makedirs(db_dir, exist_ok=True)
     db_path = os.path.join(db_dir, "petdor.db")
     conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    # Usar o DictCursor personalizado para SQLite também
+    conn.row_factory = sqlite3.Row # sqlite3.Row já retorna como dicionário/namedtuple
     logger.info(f"Conectado ao SQLite: {db_path}")
     return conn
 
@@ -48,8 +84,8 @@ def conectar_db_supabase():
             database=DB_NAME,
             user=DB_USER,
             password=DB_PASSWORD,
-            port=int(DB_PORT), # pg8000 espera int para port
-            ssl_context=True,  # pg8000 usa ssl_context=True para SSL
+            port=int(DB_PORT),
+            ssl_context=True,
         )
         logger.info("Conectado ao Supabase (PostgreSQL com pg8000)")
         return conn
@@ -66,7 +102,9 @@ def conectar_db():
     """
     if os.getenv("DB_HOST") and PG8000_AVAILABLE:
         logger.info("Usando Supabase (PostgreSQL com pg8000) - produção")
-        return conectar_db_supabase()
+        conn = conectar_db_supabase()
+        # pg8000 não tem row_factory como sqlite3, então usamos nosso DictCursor
+        return conn
     else:
         logger.info("Usando SQLite local - desenvolvimento")
         return conectar_db_sqlite()
@@ -93,3 +131,4 @@ def testar_conexao_supabase():
     except Exception as e:
         logger.error(f"Falha na conexão Supabase com pg8000: {e}")
         return False, str(e)
+
