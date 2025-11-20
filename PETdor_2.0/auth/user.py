@@ -81,7 +81,7 @@ def verificar_credenciais(email, senha):
         cur.execute("SELECT id, nome, email, senha_hash, tipo_usuario, email_confirmado, ativo FROM usuarios WHERE email = %s", (email,))
         usuario = cur.fetchone()
 
-        if usuario and usuario['ativo'] and usuario['email_confirmado'] and hash_password(senha, hashed_password=usuario['senha_hash']):
+        if usuario and usuario['ativo'] and usuario['email_confirmado'] and verify_password(senha, usuario['senha_hash']):
             logger.info(f"Login bem-sucedido para {email}")
             return True, usuario
         elif usuario and not usuario['email_confirmado']:
@@ -218,4 +218,5 @@ def atualizar_tipo_usuario(user_id, tipo_usuario):
     finally:
         if conn:
             conn.close()
+
 
