@@ -9,12 +9,12 @@ As credenciais SMTP vêm de variáveis de ambiente (.env).
 import os
 import smtplib
 import logging
-import re # Importação de 're' adicionada aqui para uso em _enviar_email
+import re
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from typing import Optional
 
-from dotenv import load_dotenv # <-- Esta linha deve estar EXATAMENTE assim
+from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +23,18 @@ load_dotenv()
 
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.office365.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-SMTP_USERNAME = os.getenv("SMTP_USERNAME")      # ex: no-reply@petdor.app
+SMTP_USERNAME = os.getenv("SMTP_USERNAME")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 SENDER_EMAIL = os.getenv("SENDER_EMAIL", SMTP_USERNAME or "no-reply@petdor.app")
+
+# ----------------------------------------------------------------------
+# URL base do app em produção - URL CORRETA DO SEU APP
+# ----------------------------------------------------------------------
+APP_BASE_URL = os.getenv(
+    "APP_BASE_URL",
+    "https://petdor.streamlit.app"  # URL do seu app no Streamlit Cloud
+)
+# ----------------------------------------------------------------------
 
 def _enviar_email(
     destinatario: str,
@@ -49,7 +58,7 @@ def _enviar_email(
 
     if corpo_texto is None:
         # Fallback simples: remove tags HTML grosseiramente
-        corpo_texto = re.sub("<[^<]+?>", "", corpo_html) # Corrigido &lt; para < e &gt; para >
+        corpo_texto = re.sub("<[^<]+?>", "", corpo_html)
 
     msg.attach(MIMEText(corpo_texto, "plain", "utf-8"))
     msg.attach(MIMEText(corpo_html, "html", "utf-8"))
@@ -82,14 +91,17 @@ def enviar_email_confirmacao(
     Usado por auth.user.cadastrar_usuario.
     """
     assunto = "Confirme seu cadastro no PETDor"
-    link = f"http://localhost:8501/?pagina=confirmar_email&token={token}"
+    # LINK CORRIGIDO: Agora aponta para https://petdor.streamlit.app
+    link = f"{APP_BASE_URL}/?pagina=confirmar_email&token={token}"
     corpo_html = f"""
     <html>
       <body>
         <p>Olá, {nome_usuario},</p>
         <p>Obrigado por se cadastrar no PETDor!</p>
         <p>Para ativar sua conta, clique no link abaixo:</p>
-        <p><a href="{link}">Confirmar meu e-mail</a></p>
+        <p><a href="{link}">🔗 Confirmar meu e-mail</a></p>
+        <p><small>Se o botão não funcionar, copie e cole este link no seu navegador:</small></p>
+        <p><code>{link}</code></p>
         <p>Se você não fez este cadastro, pode ignorar esta mensagem.</p>
         <p>Abraços,<br>Equipe PETDor</p>
       </body>
@@ -97,10 +109,14 @@ def enviar_email_confirmacao(
     """
     corpo_texto = f"""
 Olá, {nome_usuario},
+
 Obrigado por se cadastrar no PETDor!
+
 Para ativar sua conta, acesse o link abaixo:
 {link}
+
 Se você não fez este cadastro, pode ignorar esta mensagem.
+
 Abraços,
 Equipe PETDor
 """.strip()
@@ -119,14 +135,17 @@ def enviar_email_recuperacao_senha(
     Usado por auth.password_reset.reset_password_request.
     """
     assunto = "Recuperação de senha - PETDor"
-    link = f"http://localhost:8501/?pagina=reset_senha&token={token}"
+    # LINK CORRIGIDO: Agora aponta para https://petdor.streamlit.app
+    link = f"{APP_BASE_URL}/?pagina=reset_senha&token={token}"
     corpo_html = f"""
     <html>
       <body>
         <p>Olá, {nome_usuario},</p>
         <p>Recebemos uma solicitação para redefinir a senha da sua conta PETDor.</p>
         <p>Para redefinir sua senha, clique no link abaixo:</p>
-        <p><a href="{link}">Redefinir minha senha</a></p>
+        <p><a href="{link}">🔗 Redefinir minha senha</a></p>
+        <p><small>Se o botão não funcionar, copie e cole este link no seu navegador:</small></p>
+        <p><code>{link}</code></p>
         <p>Se você não fez esta solicitação, pode ignorar este e-mail.</p>
         <p>Abraços,<br>Equipe PETDor</p>
       </body>
@@ -134,10 +153,14 @@ def enviar_email_recuperacao_senha(
     """
     corpo_texto = f"""
 Olá, {nome_usuario},
+
 Recebemos uma solicitação para redefinir a senha da sua conta PETDor.
+
 Para redefinir sua senha, acesse o link abaixo:
 {link}
+
 Se você não fez esta solicitação, pode ignorar esta mensagem.
+
 Abraços,
 Equipe PETDor
 """.strip()
