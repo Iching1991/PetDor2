@@ -27,8 +27,8 @@ def solicitar_reset_senha(email: str) -> tuple[bool, str]:
             logger.warning(f"Tentativa de reset de senha para e-mail não encontrado: {email}")
             return False, "Se o e-mail estiver cadastrado, você receberá um link para redefinir sua senha."
 
-        # 2. Gerar um token de reset (podemos reutilizar generate_email_token ou criar um específico)
-        reset_token = generate_email_token() # Reutilizando a função de token
+        # 2. Gerar um token de reset (reutilizando generate_email_token)
+        reset_token = generate_email_token()
         token_expiracao = (datetime.now() + timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S") # Token expira em 1 hora
 
         # 3. Armazenar o token e a expiração no banco de dados para o usuário
@@ -56,7 +56,7 @@ def solicitar_reset_senha(email: str) -> tuple[bool, str]:
 def validar_token_reset(token: str) -> tuple[bool, str, str | None]:
     """
     Verifica se o token de reset de senha é válido e não expirou.
-    Retorna (True, email_do_usuario) se válido, (False, None) caso contrário.
+    Retorna (True, mensagem, email_do_usuario) se válido, (False, mensagem, None) caso contrário.
     """
     conn = None
     try:
