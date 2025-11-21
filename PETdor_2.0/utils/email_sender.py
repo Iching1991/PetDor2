@@ -91,11 +91,10 @@ def enviar_email_confirmacao(destinatario: str, nome_usuario: str, token: str) -
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>🐾 Bem-vindo ao PETDOR!</h1>
+                    <h1>🎾 Confirmação de Conta PETDOR</h1>
                 </div>
                 <p>Olá, <strong>{nome_usuario}</strong>,</p>
-                <p>Obrigado por se cadastrar no <strong>PETDOR</strong> - seu sistema de avaliação de dor animal!</p>
-                <p>Para completar seu cadastro, clique no botão abaixo para confirmar seu e-mail:</p>
+                <p>Obrigado por se cadastrar no <strong>PETDOR</strong>! Por favor, clique no botão abaixo para confirmar seu e-mail:</p>
                 <p style="text-align: center; margin: 30px 0;">
                     <a href="{confirm_url}" class="button">Confirmar E-mail</a>
                 </p>
@@ -115,6 +114,7 @@ def enviar_email_confirmacao(destinatario: str, nome_usuario: str, token: str) -
 
     return _enviar_email_generico(destinatario, assunto, corpo_html)
 
+# CORRIGIDO: Renomeado de enviar_email_recuperacao_senha para enviar_email_reset_senha
 def enviar_email_reset_senha(destinatario: str, nome_usuario: str, token: str) -> bool:
     """
     Envia e-mail com link para redefinir senha.
