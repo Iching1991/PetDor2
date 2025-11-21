@@ -3,7 +3,15 @@ import logging
 from database.connection import conectar_db
 from utils.tokens import gerar_token_simples, validar_token_simples
 from utils.email_sender import enviar_email_recuperacao_senha # Importação correta
-from auth.security import gerar_hash_senha # Assumindo que auth/security.py existe e define esta função
+from .security import hash_password, generate_email_token, verify_email_token # Importa as funções de segurança com os nomes corretos
+from database.connection import conectar_db
+from utils.email_sender import enviar_email_recuperacao_senha # Importação absoluta para o email_sender
+import logging
+import streamlit as st
+import os
+
+logger = logging.getLogger(__name__)
+
 
 logger = logging.getLogger(__name__)
 
@@ -89,3 +97,4 @@ def redefinir_senha(usuario_id, nova_senha, token):
     except Exception as e:
         logger.error(f"Erro ao redefinir senha: {e}")
         return False
+
