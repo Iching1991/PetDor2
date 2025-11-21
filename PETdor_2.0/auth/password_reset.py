@@ -2,9 +2,13 @@
 import streamlit as st
 import logging
 from datetime import datetime, timedelta
+import os # Adicionado para usar os.getenv se necessário para URLs
+
 from database.connection import conectar_db
-from .security import generate_reset_token, verify_reset_token
-from utils.email_sender import enviar_email_reset_senha
+# Importa as funções de segurança para tokens de reset
+from .security import generate_reset_token, verify_reset_token # Assumindo que estas serão criadas/renomeadas em security.py
+# Importa a função de envio de e-mail com o nome CORRETO
+from utils.email_sender import enviar_email_recuperacao_senha # CORRIGIDO: nome da função
 
 logger = logging.getLogger(__name__)
 
@@ -18,28 +22,32 @@ def solicitar_reset_senha(email: str):
         conn = conectar_db()
         cur = conn.cursor()
 
-        # CORREÇÃO: Usar '?' para placeholder do SQLite
         cur.execute("SELECT id, nome, email FROM usuarios WHERE email = ?", (email,))
         usuario = cur.fetchone()
 
         if not usuario:
             logger.warning(f"Tentativa de reset de senha para e-mail não encontrado: {email}")
-            return False, "Se o e-mail estiver cadastrado, você receberá um link para redefinir sua senha."
+            return False, "E-mail não encontrado."
 
-        token = generate_reset_token()
-        expira_em = datetime.now() + timedelta(hours=1) # Token válido por 1 hora
+        # Gera o token de reset e define a expiração (1 hora)
+        token = generate_reset_token(email) # Usa a função de security
+        expires_at = datetime.now() + timedelta(hours=1)
 
-        # CORREÇÃO: Usar '?' para placeholders do SQLite
-        cur.execute("""
-            UPDATE usuarios
-            SET reset_password_token = ?, reset_password_expires = ?
-            WHERE id = ?
-        """, (token, expira_em, usuario['id']))
+        # Salva o token e a expiração no banco de dados
+        cur.execute("UPDATE usuarios SET reset_password_token = ?, reset_password_expires = ? WHERE id = ?",
+                    (token, expires_at, usuario['id']))
         conn.commit()
 
-        enviar_email_reset_senha(email, usuario['nome'], token)
-        logger.info(f"Link de reset de senha enviado para {email}")
-        return True, "Se o e-mail estiver cadastrado, você receberá um link para redefinir sua senha."
+        # Envia o e-mail de redefinição de senha
+        # CORRIGIDO: Chama a função com o nome correto
+        enviado = enviar_email_recuperacao_senha(usuario['email'], usuario['nome'], token)
+
+        if enviado:
+            logger.info(f"E-mail de reset de senha enviado para {email}")
+            return True, "Um link para redefinir sua senha foi enviado para seu e-mail."
+        else:
+            logger.error(f"Falha ao enviar e-mail de reset de senha para {email}")
+            return False, "Erro ao enviar e-mail de redefinição de senha. Tente novamente mais tarde."
 
     except Exception as e:
         if conn:
@@ -50,43 +58,61 @@ def solicitar_reset_senha(email: str):
         if conn:
             conn.close()
 
-def redefinir_senha_com_token(token: str, nova_senha: str):
+def validar_token_reset(token: str):
     """
-    Redefine a senha do usuário usando um token de reset válido.
+    Verifica se um token de redefinição de senha é válido e não expirou.
+    Retorna o e-mail associado ao token se válido, None caso contrário.
     """
     conn = None
     try:
         conn = conectar_db()
         cur = conn.cursor()
 
-        # CORREÇÃO: Usar '?' para placeholders do SQLite
-        cur.execute("""
-            SELECT id, email, reset_password_expires
-            FROM usuarios
-            WHERE reset_password_token = ?
-        """, (token,))
+        # Busca o usuário pelo token
+        cur.execute("SELECT email, reset_password_expires FROM usuarios WHERE reset_password_token = ?", (token,))
         usuario = cur.fetchone()
 
         if not usuario:
+            return None # Token não encontrado
+
+        # Verifica a expiração do token
+        if usuario['reset_password_expires'] and usuario['reset_password_expires'] > datetime.now():
+            # Token válido e não expirado
+            return usuario['email']
+        else:
+            # Token expirado ou sem data de expiração
+            logger.warning(f"Tentativa de usar token de reset expirado ou inválido para e-mail: {usuario['email']}")
+            return None
+
+    except Exception as e:
+        logger.error(f"Erro ao validar token de reset: {e}", exc_info=True)
+        return None
+    finally:
+        if conn:
+            conn.close()
+
+def redefinir_senha_com_token(token: str, nova_senha: str):
+    """
+    Redefine a senha de um usuário usando um token válido.
+    """
+    conn = None
+    try:
+        email = validar_token_reset(token)
+        if not email:
             return False, "Token de redefinição de senha inválido ou expirado."
 
-        # Verifica se o token expirou
-        if usuario['reset_password_expires'] < datetime.now():
-            # Limpa o token expirado para evitar reuso
-            cur.execute("UPDATE usuarios SET reset_password_token = NULL, reset_password_expires = NULL WHERE id = ?", (usuario['id'],))
-            conn.commit()
-            return False, "Token de redefinição de senha expirado. Por favor, solicite um novo."
+        # Importa redefinir_senha aqui para evitar importação circular
+        from .user import redefinir_senha
 
-        # O token é válido, redefinir a senha
-        from .user import redefinir_senha # Importação local para evitar circular
-
-        sucesso, mensagem = redefinir_senha(usuario['email'], nova_senha)
+        sucesso, mensagem = redefinir_senha(email, nova_senha)
 
         if sucesso:
-            # Limpa o token após o uso bem-sucedido
-            cur.execute("UPDATE usuarios SET reset_password_token = NULL, reset_password_expires = NULL WHERE id = ?", (usuario['id'],))
+            conn = conectar_db()
+            cur = conn.cursor()
+            # Limpa o token de reset após o uso
+            cur.execute("UPDATE usuarios SET reset_password_token = NULL, reset_password_expires = NULL WHERE email = ?", (email,))
             conn.commit()
-            logger.info(f"Senha redefinida com sucesso para {usuario['email']}")
+            logger.info(f"Senha redefinida com sucesso para {email} usando token.")
             return True, "Senha redefinida com sucesso. Você já pode fazer login."
         else:
             return False, f"Erro ao redefinir senha: {mensagem}"
