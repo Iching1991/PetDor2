@@ -1,4 +1,4 @@
-# PETdor_2.0/database/connection.py
+# PETdor_2_0/database/connection.py
 """
 Conexão inteligente: PostgreSQL (Supabase com pg8000) na nuvem ou SQLite local.
 """
