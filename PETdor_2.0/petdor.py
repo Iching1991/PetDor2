@@ -1,19 +1,20 @@
+# PETdor_2_0/petdor.py
 import streamlit as st
 from database.migration import migrar_banco_completo
-# PETdor_2.0/petdor.py
-# ...
+
+# Importações corrigidas para corresponder aos nomes das funções em auth/user.py
 from auth.user import (
     cadastrar_usuario,
-    verificar_credenciais, # <-- Nome da função corrigido
-    buscar_usuario_por_email, # <-- Assumindo que você busca por email para login
+    verificar_credenciais, # Nome da função corrigido
+    buscar_usuario_por_email, # Função para buscar usuário por email
     # Se você tiver uma função buscar_usuario_por_id, mantenha-a ou ajuste conforme necessário
 )
-# ...
+
+# Importações corrigidas para corresponder aos nomes das funções em auth/password_reset.py
+from auth.password_reset import solicitar_reset_senha, validar_token_reset, redefinir_senha
 
 from pages.cadastro_pet import app as cadastro_pet_app
 from pages.avaliacao import app as avaliacao_app
-# Importações corrigidas para corresponder aos nomes das funções em auth/password_reset.py
-from auth.password_reset import solicitar_reset_senha, validar_token_reset, redefinir_senha
 
 # 🔧 Inicializa banco
 migrar_banco_completo()
@@ -30,74 +31,140 @@ menu = st.sidebar.selectbox("Menu", ["Login", "Criar Conta", "Redefinir Senha"])
 # -------------------------------
 if menu == "Login":
     st.subheader("Login")
-    email = st.text_input("E-mail", key="login_email")
+    email = st.text_input("E-mail", key="login_email").lower() # Email em minúsculas
     senha = st.text_input("Senha", type="password", key="login_senha")
     if st.button("Entrar", key="btn_login"):
-        ok, msg, user_id = autenticar_usuario(email, senha)
+        # A função correta é verificar_credenciais
+        ok, msg_ou_usuario = verificar_credenciais(email, senha)
         if ok:
-            st.success(msg)
-            st.session_state.user_id = user_id
+            st.success("Login bem-sucedido!")
+            st.session_state.user_id = msg_ou_usuario['id'] # Pega o ID do usuário retornado
+            st.session_state.user_email = msg_ou_usuario['email']
+            st.session_state.user_name = msg_ou_usuario['nome']
             st.session_state.page = "avaliacao" # Redireciona para a página de avaliação
+            st.rerun() # Força o rerun para mudar a página
         else:
-            st.error(msg)
+            st.error(msg_ou_usuario) # msg_ou_usuario contém a mensagem de erro
 
+    # Lógica para exibir as páginas após o login
     if "user_id" in st.session_state and st.session_state.page == "avaliacao":
         user_id = st.session_state.user_id
-        st.subheader("Cadastro e Avaliações")
-        # Cadastro de Pets
-        cadastro_pet_app(user_id)
-        # Avaliações
-        avaliacao_app(user_id)
+        st.subheader(f"Bem-vindo(a), {st.session_state.user_name}!")
+
+        # Aqui você pode adicionar um sub-menu para Cadastro de Pets e Avaliações
+        sub_menu_logado = st.sidebar.selectbox("Opções", ["Meus Pets e Avaliações", "Sair"])
+
+        if sub_menu_logado == "Meus Pets e Avaliações":
+            # Cadastro de Pets
+            cadastro_pet_app(user_id)
+            # Avaliações
+            avaliacao_app(user_id)
+        elif sub_menu_logado == "Sair":
+            st.session_state.clear() # Limpa o estado da sessão
+            st.rerun() # Redireciona para a página de login
 
 # -------------------------------
 # CRIAR CONTA
 # -------------------------------
 elif menu == "Criar Conta":
     st.subheader("Criar Nova Conta")
-    nome = st.text_input("Nome", key="criar_nome")
-    email = st.text_input("E-mail", key="criar_email")
+    nome = st.text_input("Nome", key="criar_nome").title() # Nome com primeira letra maiúscula
+    email = st.text_input("E-mail", key="criar_email").lower() # Email em minúsculas
     senha = st.text_input("Senha", type="password", key="criar_senha")
     confirmar = st.text_input("Confirmar senha", type="password", key="criar_confirmar")
+
+    # Adicionar seleção de tipo de usuário
+    tipo_usuario = st.selectbox("Tipo de Usuário", ["Tutor", "Veterinário", "Clínica"], key="criar_tipo_usuario")
+    pais = st.text_input("País", value="Brasil", key="criar_pais").title() # País com primeira letra maiúscula
+
     if st.button("Criar", key="btn_criar_conta"):
-        ok, msg = cadastrar_usuario(nome, email, senha, confirmar)
-        if ok:
-            st.success(msg)
+        if senha != confirmar:
+            st.error("As senhas não coincidem.")
         else:
-            st.error(msg)
+            # A função cadastrar_usuario espera nome, email, senha, tipo_usuario, pais
+            ok, msg = cadastrar_usuario(nome, email, senha, tipo_usuario, pais)
+            if ok:
+                st.success(msg)
+                # Opcional: Redirecionar para a página de login após o cadastro
+                # st.session_state.page = "login"
+                # st.rerun()
+            else:
+                st.error(msg)
 
 # -------------------------------
 # REDEFINIR SENHA
 # -------------------------------
 elif menu == "Redefinir Senha":
     st.subheader("Redefinir Senha")
-    email_reset = st.text_input("Seu e-mail", key="reset_email")
-    if st.button("Enviar link de redefinição", key="btn_enviar_token"):
-        # A função solicitar_reset_senha envia o e-mail e retorna True/False
-        ok = solicitar_reset_senha(email_reset)
-        if ok:
-            st.info("Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha.")
-        else:
-            st.error("Ocorreu um erro ao tentar enviar o e-mail. Tente novamente mais tarde.")
 
-    st.markdown("---") # Separador visual
-    st.write("Ou, se você já tem um token:")
-    token_input = st.text_input("Token de redefinição", key="reset_token")
-    nova_senha = st.text_input("Nova senha", type="password", key="reset_nova_senha")
+    # Verifica se há um token na URL (para quando o usuário clica no link do e-mail)
+    query_params = st.query_params
+    token_url = query_params.get("token")
+    pagina_url = query_params.get("pagina")
 
-    if st.button("Alterar senha", key="btn_alterar_senha"):
-        if not token_input or not nova_senha:
-            st.error("Preencha o token e a nova senha.")
-        else:
-            # 1. Validar o token e obter o ID do usuário
-            token_valido_status, usuario_id = validar_token_reset(token_input)
+    if pagina_url == "reset_senha" and token_url:
+        st.info("Você está redefinindo sua senha através de um link de e-mail.")
+        token_input = st.text_input("Token de redefinição (preenchido automaticamente)", value=token_url, key="reset_token_url", disabled=True)
 
-            if token_valido_status and usuario_id:
-                # 2. Redefinir a senha
-                ok_redefinir = redefinir_senha(usuario_id, nova_senha, token_input)
-                if ok_redefinir:
-                    st.success("Senha alterada com sucesso! Você já pode fazer login.")
+        # Validar o token da URL imediatamente
+        token_valido_status, msg_validacao, email_usuario_reset = validar_token_reset(token_url)
+
+        if token_valido_status:
+            st.success(msg_validacao)
+            nova_senha = st.text_input("Nova senha", type="password", key="reset_nova_senha_url")
+            confirmar_nova_senha = st.text_input("Confirmar nova senha", type="password", key="reset_confirmar_nova_senha_url")
+
+            if st.button("Alterar senha", key="btn_alterar_senha_url"):
+                if nova_senha != confirmar_nova_senha:
+                    st.error("As senhas não coincidem.")
                 else:
-                    st.error("Erro ao redefinir a senha. Tente novamente.")
-            else:
-                st.error("Token inválido ou expirado.")
+                    ok_redefinir, msg_redefinir = redefinir_senha(email_usuario_reset, nova_senha)
+                    if ok_redefinir:
+                        st.success(msg_redefinir)
+                        st.info("Você pode fazer login agora.")
+                        # Limpa os query params para evitar reuso do token
+                        st.query_params.clear()
+                        st.rerun()
+                    else:
+                        st.error(msg_redefinir)
+        else:
+            st.error(msg_validacao)
+            st.info("Por favor, solicite um novo link de redefinição de senha.")
+            # Limpa os query params para evitar reuso do token inválido
+            st.query_params.clear()
+            st.rerun()
 
+    else: # Fluxo normal de solicitação de reset
+        email_reset = st.text_input("Seu e-mail", key="reset_email").lower() # Email em minúsculas
+        if st.button("Enviar link de redefinição", key="btn_enviar_token"):
+            ok, msg = solicitar_reset_senha(email_reset) # A função agora retorna (bool, str)
+            if ok:
+                st.info(msg)
+            else:
+                st.error(msg)
+
+        st.markdown("---") # Separador visual
+        st.write("Ou, se você já tem um token e não está usando o link do e-mail:")
+        token_input = st.text_input("Token de redefinição", key="reset_token_manual")
+        nova_senha = st.text_input("Nova senha", type="password", key="reset_nova_senha_manual")
+        confirmar_nova_senha_manual = st.text_input("Confirmar nova senha", type="password", key="reset_confirmar_nova_senha_manual")
+
+        if st.button("Alterar senha manualmente", key="btn_alterar_senha_manual"):
+            if not token_input or not nova_senha or not confirmar_nova_senha_manual:
+                st.error("Preencha o token e a nova senha (e a confirmação).")
+            elif nova_senha != confirmar_nova_senha_manual:
+                st.error("As senhas não coincidem.")
+            else:
+                # 1. Validar o token e obter o e-mail do usuário
+                token_valido_status, msg_validacao, email_usuario_reset = validar_token_reset(token_input)
+
+                if token_valido_status and email_usuario_reset:
+                    # 2. Redefinir a senha
+                    ok_redefinir, msg_redefinir = redefinir_senha(email_usuario_reset, nova_senha)
+                    if ok_redefinir:
+                        st.success(msg_redefinir)
+                        st.info("Você pode fazer login agora.")
+                    else:
+                        st.error(msg_redefinir)
+                else:
+                    st.error(msg_validacao) # Exibe a mensagem de erro da validação do token
