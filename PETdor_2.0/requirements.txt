@@ -1,12 +1,7 @@
 streamlit==1.32.0
 bcrypt==4.1.2
 python-dotenv==1.0.1
-
-# pg8000: use uma versão que com certeza existe no PyPI e funciona com Py3.11/3.13
-pg8000==1.30.5
-
-# Dependências que o próprio Streamlit costuma precisar em apps mais completos
+pg8000==1.31.5  # Versão corrigida
 altair==5.2.0
 pandas==2.2.2
-pyarrow==15.0.0
-Pillow==10.3.0
+numpy==1.24.0
