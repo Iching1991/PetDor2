@@ -2,34 +2,52 @@
 import streamlit as st
 import logging
 from datetime import datetime
+import os # Importado para usar os.getenv na criar_tabelas_se_nao_existir
 from database.connection import conectar_db # Importa a função inteligente
-from .security import hash_password, generate_email_token, verify_email_token
-from email_sender import send_confirmation_email
+from .security import hash_password, generate_email_token, verify_email_token, verify_password # Adicionado verify_password
+from ..email_sender import enviar_email_confirmacao # Importação relativa e nome da função corrigido
 import uuid
 
 logger = logging.getLogger(__name__)
 
 def criar_tabelas_se_nao_existir():
-    """Cria a tabela de usuários se não existir."""
+    """Cria a tabela de usuários se não existir (para SQLite local ou como fallback)."""
     conn = conectar_db()
     cur = conn.cursor()
     # Note: O script de criação de tabelas já foi rodado no Supabase.
     # Esta função é mais para garantir compatibilidade local ou para novas tabelas.
     # Para o Supabase, as tabelas já existem.
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS usuarios (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            email TEXT NOT NULL UNIQUE,
-            senha_hash TEXT NOT NULL,
-            tipo_usuario TEXT NOT NULL DEFAULT 'Tutor',
-            pais TEXT NOT NULL DEFAULT 'Brasil',
-            email_confirm_token TEXT UNIQUE,
-            email_confirmado BOOLEAN NOT NULL DEFAULT FALSE,
-            ativo BOOLEAN NOT NULL DEFAULT TRUE,
-            data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-    """)
+    # Usar BIGSERIAL para PostgreSQL e INTEGER PRIMARY KEY AUTOINCREMENT para SQLite
+    if os.getenv("DB_HOST"): # Se estiver no Supabase (PostgreSQL)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id BIGSERIAL PRIMARY KEY,
+                nome TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                senha_hash TEXT NOT NULL,
+                tipo_usuario TEXT NOT NULL DEFAULT 'Tutor',
+                pais TEXT NOT NULL DEFAULT 'Brasil',
+                email_confirm_token TEXT UNIQUE,
+                email_confirmado BOOLEAN NOT NULL DEFAULT FALSE,
+                ativo BOOLEAN NOT NULL DEFAULT TRUE,
+                data_cadastro TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+        """)
+    else: # Se estiver no ambiente local (SQLite)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS usuarios (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                email TEXT NOT NULL UNIQUE,
+                senha_hash TEXT NOT NULL,
+                tipo_usuario TEXT NOT NULL DEFAULT 'Tutor',
+                pais TEXT NOT NULL DEFAULT 'Brasil',
+                email_confirm_token TEXT UNIQUE,
+                email_confirmado BOOLEAN NOT NULL DEFAULT FALSE,
+                ativo BOOLEAN NOT NULL DEFAULT TRUE,
+                data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
     conn.commit()
     conn.close()
 
@@ -46,7 +64,7 @@ def cadastrar_usuario(nome, email, senha, tipo_usuario, pais):
         senha_hash = hash_password(senha)
         token = generate_email_token()
 
-        # Usar %s para PostgreSQL e 0 para FALSE (ou FALSE diretamente)
+        # Usar %s para PostgreSQL e FALSE para booleano
         cur.execute("""
             INSERT INTO usuarios (nome, email, senha_hash, tipo_usuario, pais, email_confirm_token, email_confirmado)
             VALUES (%s, %s, %s, %s, %s, %s, FALSE)
@@ -55,8 +73,8 @@ def cadastrar_usuario(nome, email, senha, tipo_usuario, pais):
         conn.commit()
         logger.info(f"Usuário {email} cadastrado com sucesso.")
 
-        # Enviar e-mail de confirmação
-        send_confirmation_email(email, nome, token)
+        # Enviar e-mail de confirmação (nome da função corrigido)
+        enviar_email_confirmacao(email, nome, token)
 
         return True, "Cadastro realizado com sucesso! Verifique seu e-mail para confirmar a conta."
     except Exception as e:
@@ -81,6 +99,7 @@ def verificar_credenciais(email, senha):
         cur.execute("SELECT id, nome, email, senha_hash, tipo_usuario, email_confirmado, ativo FROM usuarios WHERE email = %s", (email,))
         usuario = cur.fetchone()
 
+        # Usar verify_password para verificar a senha
         if usuario and usuario['ativo'] and usuario['email_confirmado'] and verify_password(senha, usuario['senha_hash']):
             logger.info(f"Login bem-sucedido para {email}")
             return True, usuario
@@ -218,5 +237,3 @@ def atualizar_tipo_usuario(user_id, tipo_usuario):
     finally:
         if conn:
             conn.close()
-
-
