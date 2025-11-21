@@ -1,10 +1,15 @@
 import streamlit as st
 from database.migration import migrar_banco_completo
+# PETdor_2.0/petdor.py
+# ...
 from auth.user import (
     cadastrar_usuario,
-    autenticar_usuario,
-    buscar_usuario_por_id
+    verificar_credenciais, # <-- Nome da função corrigido
+    buscar_usuario_por_email, # <-- Assumindo que você busca por email para login
+    # Se você tiver uma função buscar_usuario_por_id, mantenha-a ou ajuste conforme necessário
 )
+# ...
+
 from pages.cadastro_pet import app as cadastro_pet_app
 from pages.avaliacao import app as avaliacao_app
 # Importações corrigidas para corresponder aos nomes das funções em auth/password_reset.py
@@ -95,3 +100,4 @@ elif menu == "Redefinir Senha":
                     st.error("Erro ao redefinir a senha. Tente novamente.")
             else:
                 st.error("Token inválido ou expirado.")
+
