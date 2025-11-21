@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 # -------------------------------
 # HASH DE SENHA
 # -------------------------------
-def hash_password(senha: str) -> str: # RENOMEADO de gerar_hash_senha
+def hash_password(senha: str) -> str:
     """
     Gera um hash seguro para a senha.
     """
@@ -27,7 +27,7 @@ def hash_password(senha: str) -> str: # RENOMEADO de gerar_hash_senha
 # -------------------------------
 # VERIFICAR SENHA
 # -------------------------------
-def verify_password(senha: str, hashed_password: str) -> bool: # RENOMEADO de verificar_senha
+def verify_password(senha: str, hashed_password: str) -> bool:
     """
     Verifica se a senha fornecida corresponde ao hash armazenado.
     """
@@ -40,7 +40,7 @@ def verify_password(senha: str, hashed_password: str) -> bool: # RENOMEADO de ve
 # -------------------------------
 # GERAR TOKEN DE CONFIRMAÇÃO DE E-MAIL
 # -------------------------------
-def generate_email_token() -> str: # RENOMEADO de gerar_token e adaptado para e-mail
+def generate_email_token() -> str:
     """
     Gera um token único para confirmação de e-mail usando UUID.
     """
@@ -54,10 +54,5 @@ def verify_email_token(token: str) -> bool:
     Verifica a validade básica de um token de e-mail.
     (A lógica de expiração e uso único é geralmente tratada no banco de dados).
     """
-    return bool(token) # Um token UUID é "válido" se não for nulo/vazio.
-                       # A validação real (se já foi usado, se expirou)
-                       # é feita na função confirmar_email no user.py.
+    return bool(token)
 
-# As funções 'gerar_token' e 'token_valido' originais foram adaptadas/removidas
-# para corresponder às importações de 'user.py'. Se precisar de tokens com
-# expiração para outras finalidades, podemos recriá-las.
