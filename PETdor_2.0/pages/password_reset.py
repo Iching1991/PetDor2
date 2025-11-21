@@ -1,147 +1,160 @@
-# PETdor_2.0/auth/password_reset.py
-
 """
-Módulo para recuperação e redefinição de senha.
+Sistema de Recuperação de Senha - PETDOR
+----------------------------------------
+Fluxo:
+1. Usuário solicita recuperação → gera token → salva no banco → envia email
+2. Usuário clica no link → valida token
+3. Usuário redefine a senha → token é invalidado
 """
 
-import uuid
-import logging
-import bcrypt
+import secrets
+import hashlib
+import sqlite3
 from datetime import datetime, timedelta
 
-from database.connection import conectar_db
-from database.models import buscar_usuario_por_email
-from utils.email_sender import enviar_email_reset_senha  # Função correta
+# Importa o módulo correto do envio de e-mail
+from utils.email_sender import enviar_email_html  # ajuste se seu projeto usar outro nome
 
-logger = logging.getLogger(__name__)
+# Caminho do banco local
+DB_PATH = "database/petdor.db"
 
 
-# -----------------------------------------------------------
-# 1) Solicitar recuperação de senha
-# -----------------------------------------------------------
-def solicitar_reset_senha(email: str) -> tuple[bool, str]:
+# ============================================================
+# 📌 Funções utilitárias internas
+# ============================================================
+
+def conectar():
+    return sqlite3.connect(DB_PATH, check_same_thread=False)
+
+
+def hash_senha(senha: str) -> str:
+    """Hash seguro da senha usando SHA256."""
+    return hashlib.sha256(senha.encode()).hexdigest()
+
+
+# ============================================================
+# 📌 1. Solicitar reset (gerar token + email)
+# ============================================================
+
+def solicitar_reset_senha(email: str) -> bool:
     """
-    Gera um token de recuperação, salva no banco e envia o link por e-mail.
+    Gera token de recuperação, salva no BD e envia e-mail.
+    Retorna True se o processo foi iniciado, False caso email não exista.
     """
+    conn = conectar()
+    cur = conn.cursor()
 
-    usuario = buscar_usuario_por_email(email)
+    # Verifica se email existe
+    cur.execute("SELECT id, nome FROM usuarios WHERE email = ?", (email,))
+    user = cur.fetchone()
 
-    # Segurança: mesmo se não existir, responde igual
-    if not usuario:
-        return True, "Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha."
-
-    # Gera token único
-    token = str(uuid.uuid4())
-    expiracao = datetime.now() + timedelta(hours=1)
-
-    try:
-        conn = conectar_db()
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            INSERT INTO password_resets (usuario_id, token, criado_em, utilizado)
-            VALUES (?, ?, ?, 0)
-        """, (usuario.id, token, expiracao.strftime("%Y-%m-%d %H:%M:%S")))
-
-        conn.commit()
+    if not user:
         conn.close()
+        return False
 
-    except Exception as e:
-        logger.error(f"Erro ao gerar token de reset: {e}")
-        return False, "Erro interno ao gerar solicitação."
+    user_id, nome = user
 
-    # Envia o e-mail
-    email_ok = enviar_email_reset_senha(email, usuario.nome, token)
+    # Gera token único e define validade de 1 hora
+    token = secrets.token_hex(32)
+    validade = datetime.utcnow() + timedelta(hours=1)
 
-    if not email_ok:
-        logger.warning(f"Falha ao enviar e-mail para {email}.")
-        return False, "Erro ao enviar o e-mail de recuperação."
+    # Remove tokens antigos
+    cur.execute("DELETE FROM password_resets WHERE user_id = ?", (user_id,))
 
-    return True, "Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha."
+    # Salva novo token
+    cur.execute("""
+        INSERT INTO password_resets (user_id, token, validade)
+        VALUES (?, ?, ?)
+    """, (user_id, token, validade.isoformat()))
 
+    conn.commit()
+    conn.close()
 
-# -----------------------------------------------------------
-# 2) Validar token do link
-# -----------------------------------------------------------
-def validar_token_reset(token: str) -> tuple[bool, str | int]:
-    """
-    Verifica se o token existe, não foi usado e está dentro do prazo.
-    Retorna (True, usuario_id) se válido.
-    """
-    try:
-        conn = conectar_db()
-        cursor = conn.cursor()
+    # Link para redefinição
+    link_reset = f"https://petdor.streamlit.app/?reset_token={token}"
 
-        cursor.execute("""
-            SELECT usuario_id, criado_em, utilizado
-            FROM password_resets
-            WHERE token = ?
-        """, (token,))
+    # Conteúdo do email
+    assunto = "Recuperação de senha - PETDOR"
+    html = f"""
+    <h2>Olá, {nome}!</h2>
+    <p>Você solicitou redefinir a senha da sua conta no <strong>PETDOR</strong>.</p>
+    <p>Para continuar, clique no botão abaixo:</p>
 
-        row = cursor.fetchone()
-        conn.close()
+    <a href="{link_reset}"
+       style="padding:12px 22px; background:#0084ff; color:white;
+              text-decoration:none; border-radius:6px;">
+       Redefinir Minha Senha
+    </a>
 
-        if not row:
-            return False, "Token inválido."
-
-        usuario_id, criado_em, utilizado = row
-
-        # Se já foi utilizado
-        if utilizado == 1:
-            return False, "Token já utilizado."
-
-        # Validade: 1 hora
-        criado = datetime.strptime(criado_em, "%Y-%m-%d %H:%M:%S")
-        if datetime.now() > criado + timedelta(hours=1):
-            return False, "Token expirado."
-
-        return True, usuario_id
-
-    except Exception as e:
-        logger.error(f"Erro ao validar token: {e}")
-        return False, "Erro interno."
-
-
-# -----------------------------------------------------------
-# 3) Redefinir senha com token
-# -----------------------------------------------------------
-def redefinir_senha_com_token(token: str, nova_senha: str) -> tuple[bool, str]:
-    """
-    Redefine a senha do usuário se o token for válido.
+    <p>Se você não solicitou isto, apenas ignore este e-mail.</p>
+    <p><small>Token válido por 1 hora.</small></p>
     """
 
-    valido, resultado = validar_token_reset(token)
+    enviar_email_html(email, assunto, html)
 
-    if not valido:
-        return False, resultado  # mensagem de erro
+    return True
 
-    usuario_id = resultado
 
-    try:
-        senha_hash = bcrypt.hashpw(nova_senha.encode(), bcrypt.gensalt()).decode()
+# ============================================================
+# 📌 2. Validar token no link
+# ============================================================
 
-        conn = conectar_db()
-        cursor = conn.cursor()
+def validar_token_reset(token: str):
+    """
+    Retorna user_id se token for válido; caso contrário, retorna None.
+    """
+    conn = conectar()
+    cur = conn.cursor()
 
-        # Atualiza senha do usuário
-        cursor.execute("""
-            UPDATE usuarios
-            SET senha = ?
-            WHERE id = ?
-        """, (senha_hash, usuario_id))
+    cur.execute("""
+        SELECT user_id, validade
+        FROM password_resets
+        WHERE token = ?
+    """, (token,))
+    row = cur.fetchone()
+    conn.close()
 
-        # Marca token como utilizado
-        cursor.execute("""
-            UPDATE password_resets
-            SET utilizado = 1
-            WHERE token = ?
-        """, (token,))
+    if not row:
+        return None
 
-        conn.commit()
-        conn.close()
+    user_id, validade = row
 
-        return True, "Senha redefinida com sucesso."
+    # Verifica expiração
+    if datetime.utcnow() > datetime.fromisoformat(validade):
+        return None
 
-    except Exception as e:
-        logger.error(f"Erro ao redefinir senha: {e}")
-        return False, "Erro interno ao redefinir senha."
+    return user_id
+
+
+# ============================================================
+# 📌 3. Redefinir senha
+# ============================================================
+
+def redefinir_senha_com_token(token: str, nova_senha: str) -> bool:
+    """
+    Altera a senha do usuário caso token seja válido.
+    Retorna True se redefiniu, False caso token inválido.
+    """
+    user_id = validar_token_reset(token)
+
+    if not user_id:
+        return False
+
+    conn = conectar()
+    cur = conn.cursor()
+
+    nova_hash = hash_senha(nova_senha)
+
+    # Atualiza senha
+    cur.execute("""
+        UPDATE usuarios
+        SET senha = ?
+        WHERE id = ?
+    """, (nova_hash, user_id))
+
+    # Invalida token
+    cur.execute("DELETE FROM password_resets WHERE user_id = ?", (user_id,))
+
+    conn.commit()
+    conn.close()
+    return True
