@@ -1,6 +1,14 @@
-# PETdor_2.0/auth/__init__.py
-"""
-Módulo de autenticação e gerenciamento de usuários para o PETDor.
-"""
-# Deixamos este arquivo o mais simples possível para evitar circular imports.
-# Os módulos devem ser importados diretamente onde forem necessários.
+# PETdor_2_0/auth/__init__.py
+"""Módulo de autenticação e segurança do PETDOR."""
+
+from . import user
+from . import password_reset
+from . import email_confirmation
+from . import security
+
+__all__ = [
+    "user",
+    "password_reset",
+    "email_confirmation",
+    "security",
+]
