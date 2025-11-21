@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 # -------------------------------
 # HASH DE SENHA
 # -------------------------------
-def hash_password(senha: str) -> str:
+def hash_password(senha: str) -> str: # Mantendo o nome padronizado para hash_password
     """
     Gera um hash seguro para a senha.
     """
@@ -27,7 +27,7 @@ def hash_password(senha: str) -> str:
 # -------------------------------
 # VERIFICAR SENHA
 # -------------------------------
-def verify_password(senha: str, hashed_password: str) -> bool:
+def verify_password(senha: str, hashed_password: str) -> bool: # Mantendo o nome padronizado para verify_password
     """
     Verifica se a senha fornecida corresponde ao hash armazenado.
     """
@@ -40,7 +40,7 @@ def verify_password(senha: str, hashed_password: str) -> bool:
 # -------------------------------
 # GERAR TOKEN DE CONFIRMAÇÃO DE E-MAIL
 # -------------------------------
-def generate_email_token() -> str:
+def generate_email_token() -> str: # Mantendo o nome padronizado para generate_email_token
     """
     Gera um token único para confirmação de e-mail usando UUID.
     """
@@ -49,7 +49,7 @@ def generate_email_token() -> str:
 # -------------------------------
 # VERIFICAR TOKEN DE E-MAIL (SIMPLIFICADO)
 # -------------------------------
-def verify_email_token(token: str) -> bool:
+def verify_email_token(token: str) -> bool: # Mantendo o nome padronizado para verify_email_token
     """
     Verifica a validade básica de um token de e-mail.
     (A lógica de expiração e uso único é geralmente tratada no banco de dados).
