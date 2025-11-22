@@ -59,7 +59,6 @@ def cadastrar_usuario(nome, email, senha, tipo_usuario, pais):
         conn = conectar_db()
         cur = conn.cursor()
         senha_hash = hash_password(senha)
-        # generate_email_token precisa do email para criar o token
         token = generate_email_token(email) 
         cur.execute("""
             INSERT INTO usuarios (nome, email, senha_hash, tipo_usuario, pais, email_confirm_token, email_confirmado)
@@ -68,11 +67,9 @@ def cadastrar_usuario(nome, email, senha, tipo_usuario, pais):
         conn.commit()
         logger.info(f"Usuário {email} cadastrado com sucesso.")
 
-        # Envia o e-mail de confirmação
         enviado = enviar_email_confirmacao(email, nome, token)
         if not enviado:
             logger.error(f"Falha ao enviar e-mail de confirmação para {email}")
-            # Não impede o cadastro, mas informa sobre a falha no e-mail
             return True, "Cadastro realizado com sucesso! No entanto, houve um problema ao enviar o e-mail de confirmação. Por favor, tente confirmar mais tarde."
 
         return True, "Cadastro realizado com sucesso! Verifique seu e-mail."
@@ -157,18 +154,18 @@ def redefinir_senha(email, nova_senha):
         senha_hash = hash_password(nova_senha)
         cur.execute("UPDATE usuarios SET senha_hash = ? WHERE email = ?", (senha_hash, email))
         conn.commit()
-        logger.info(f"Senha redefinida para {email}") # Adicionado log
+        logger.info(f"Senha redefinida para {email}")
         return True, "Senha redefinida com sucesso."
     except Exception as e:
         if conn:
             conn.rollback()
-        logger.error(f"Erro ao redefinir senha para {email}: {e}", exc_info=True) # Adicionado log
+        logger.error(f"Erro ao redefinir senha para {email}: {e}", exc_info=True)
         return False, f"Erro ao redefinir senha: {e}"
     finally:
         if conn:
             conn.close()
 
-def buscar_todos_usuarios(): # Adicionado de volta, pois é útil para admin
+def buscar_todos_usuarios():
     """Retorna todos os usuários (para fins administrativos)."""
     conn = None
     try:
@@ -184,7 +181,7 @@ def buscar_todos_usuarios(): # Adicionado de volta, pois é útil para admin
         if conn:
             conn.close()
 
-def atualizar_status_usuario(user_id, ativo): # Adicionado de volta, útil para admin
+def atualizar_status_usuario(user_id, ativo):
     """Ativa ou desativa um usuário."""
     conn = None
     try:
@@ -203,7 +200,7 @@ def atualizar_status_usuario(user_id, ativo): # Adicionado de volta, útil para 
         if conn:
             conn.close()
 
-def atualizar_tipo_usuario(user_id, tipo_usuario): # Adicionado de volta, útil para admin
+def atualizar_tipo_usuario(user_id, tipo_usuario):
     """Atualiza o tipo de usuário."""
     conn = None
     try:
