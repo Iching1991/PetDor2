@@ -12,8 +12,8 @@ import hashlib
 import sqlite3
 from datetime import datetime, timedelta
 
-# Importa o módulo correto do envio de e-mail
-from utils.email_sender import enviar_email_html  # ajuste se seu projeto usar outro nome
+# Importa função correta de envio de reset de senha
+from utils.email_sender import enviar_email_reset_senha
 
 # Caminho do banco local
 DB_PATH = "database/petdor.db"
@@ -70,27 +70,8 @@ def solicitar_reset_senha(email: str) -> bool:
     conn.commit()
     conn.close()
 
-    # Link para redefinição
-    link_reset = f"https://petdor.streamlit.app/?reset_token={token}"
-
-    # Conteúdo do email
-    assunto = "Recuperação de senha - PETDOR"
-    html = f"""
-    <h2>Olá, {nome}!</h2>
-    <p>Você solicitou redefinir a senha da sua conta no <strong>PETDOR</strong>.</p>
-    <p>Para continuar, clique no botão abaixo:</p>
-
-    <a href="{link_reset}"
-       style="padding:12px 22px; background:#0084ff; color:white;
-              text-decoration:none; border-radius:6px;">
-       Redefinir Minha Senha
-    </a>
-
-    <p>Se você não solicitou isto, apenas ignore este e-mail.</p>
-    <p><small>Token válido por 1 hora.</small></p>
-    """
-
-    enviar_email_html(email, assunto, html)
+    # Envia email com token
+    enviar_email_reset_senha(email, nome, token)
 
     return True
 
@@ -158,3 +139,5 @@ def redefinir_senha_com_token(token: str, nova_senha: str) -> bool:
     conn.commit()
     conn.close()
     return True
+
+
