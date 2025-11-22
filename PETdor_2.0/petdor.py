@@ -3,15 +3,15 @@ import streamlit as st
 import sys
 import os
 
-# Adiciona o diretório pai (PETdor_2_0) ao sys.path para resolver importações
+# --- INÍCIO DA CORREÇÃO DE IMPORTAÇÃO ---
+# Adiciona o diretório PETdor_2_0 ao sys.path para resolver importações absolutas
 # Isso permite que módulos como 'auth' e 'utils' sejam importados diretamente
 # como 'auth.user' ou 'utils.email_sender' de qualquer lugar dentro do projeto.
-current_dir = os.path.dirname(os.path.abspath(__file__))
-# project_root deve ser o diretório que contém 'auth' e 'utils'
-# Se petdor.py está em PETdor_2_0/, então project_root é PETdor_2_0/
-project_root = current_dir 
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
+current_script_dir = os.path.dirname(os.path.abspath(__file__))
+# current_script_dir agora é '/mount/src/petdor-2.0/PETdor_2_0'
+if current_script_dir not in sys.path:
+    sys.path.insert(0, current_script_dir)
+# --- FIM DA CORREÇÃO DE IMPORTAÇÃO ---
 
 from database.migration import migrar_banco_completo
 
@@ -75,21 +75,13 @@ if menu == "Login":
 # -------------------------------
 elif menu == "Criar Conta":
     st.subheader("Criar Nova Conta")
-    with st.form("cadastro_form"):
+    with st.form("form_cadastro"):
         novo_nome = st.text_input("Nome Completo").title() # Nome com primeira letra maiúscula
         novo_email = st.text_input("E-mail").lower() # Email em minúsculas
         nova_senha = st.text_input("Senha", type="password")
         confirmar_senha = st.text_input("Confirmar Senha", type="password")
-
-        # O usuário deseja que o cadastro inclua opção para selecionar tipo de usuário: clínica, tutor ou veterinário.
-        tipo_usuario_options = ["Tutor", "Veterinário", "Clínica"]
-        novo_tipo_usuario = st.selectbox("Tipo de Usuário", tipo_usuario_options)
-
-        # O usuário prefere que os campos de nome sejam title-cased e e-mails lower-cased.
-        # Já está sendo feito acima.
-
-        # O usuário utiliza email hospedado na GoDaddy com o domínio petdor.app registrado.
-        # Isso é relevante para o envio de e-mails, mas não para o formulário de cadastro em si.
+        tipo_usuario = st.selectbox("Tipo de Usuário", ["Tutor", "Veterinário", "Clínica"])
+        pais = st.text_input("País", value="Brasil")
 
         btn_cadastrar = st.form_submit_button("Cadastrar")
 
@@ -101,12 +93,10 @@ elif menu == "Criar Conta":
             elif len(nova_senha) < 6:
                 st.error("A senha deve ter pelo menos 6 caracteres.")
             else:
-                # O usuário deseja que o cadastro envie um e-mail de confirmação após o registro.
-                # A função cadastrar_usuario já lida com isso.
-                ok, msg = cadastrar_usuario(novo_nome, novo_email, nova_senha, novo_tipo_usuario, "Brasil") # País fixo por enquanto
+                ok, msg = cadastrar_usuario(novo_nome, novo_email, nova_senha, tipo_usuario, pais)
                 if ok:
                     st.success(msg)
-                    st.info("Verifique seu e-mail para confirmar a conta.")
+                    st.info("Agora você pode fazer login.")
                 else:
                     st.error(msg)
 # -------------------------------
@@ -114,23 +104,24 @@ elif menu == "Criar Conta":
 # -------------------------------
 elif menu == "Redefinir Senha":
     st.subheader("Redefinir Senha")
-
-    # Verifica se há um token na URL (para quando o usuário clica no link do e-mail)
+    # Verifica se há um token na URL (vindo do e-mail)
     query_params = st.query_params
     token_url = query_params.get("token")
 
     if token_url:
-        st.info("Você clicou em um link de redefinição de senha.")
-        # 1. Validar o token e obter o e-mail do usuário
+        st.info("Você está redefinindo sua senha através de um link de e-mail.")
+        # 1. Validar o token
         token_valido_status, msg_validacao, email_usuario_reset = validar_token_reset(token_url)
 
         if token_valido_status and email_usuario_reset:
-            st.success(f"Token válido para {email_usuario_reset}. Por favor, defina sua nova senha.")
+            st.success(msg_validacao) # Ex: "Token válido."
+            st.write(f"Redefinindo senha para: **{email_usuario_reset}**")
             nova_senha_url = st.text_input("Nova senha", type="password", key="reset_nova_senha_url")
             confirmar_nova_senha_url = st.text_input("Confirmar nova senha", type="password", key="reset_confirmar_nova_senha_url")
-
-            if st.button("Redefinir Senha", key="btn_redefinir_url"):
-                if nova_senha_url != confirmar_nova_senha_url:
+            if st.button("Alterar senha", key="btn_alterar_senha_url"):
+                if not nova_senha_url or not confirmar_nova_senha_url:
+                    st.error("Preencha a nova senha e a confirmação.")
+                elif nova_senha_url != confirmar_nova_senha_url:
                     st.error("As senhas não coincidem.")
                 elif len(nova_senha_url) < 6:
                     st.error("A senha deve ter pelo menos 6 caracteres.")
