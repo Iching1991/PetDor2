@@ -1,181 +1,90 @@
-# PETdor_2.0/utils/email_sender.py
-"""
-Módulo de envio de e-mails do PETDOR.
-Suporta confirmação de conta e redefinição de senha.
-"""
-
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 import os
+import smtplib
+import ssl
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 import logging
 
 logger = logging.getLogger(__name__)
 
-# -----------------------------
-# CONFIGURAÇÕES DE E-MAIL
-# -----------------------------
-
-DEFAULT_GODADDY_SMTP = "smtpout.secureserver.net"
-
-EMAIL_HOST = os.getenv("EMAIL_HOST", DEFAULT_GODADDY_SMTP)
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
+# =============================================================
+# Carregar variáveis de ambiente no padrão EMAIL_*
+# =============================================================
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
-EMAIL_SENDER = os.getenv("EMAIL_SENDER", "relatorio@petdor.app")
+EMAIL_HOST = os.getenv("EMAIL_HOST")
+EMAIL_PORT = os.getenv("EMAIL_PORT")
+SENDER_EMAIL = os.getenv("SENDER_EMAIL", EMAIL_USER)
 
-# Domínio oficial do sistema (petdor.app)
-APP_BASE_URL = os.getenv("APP_BASE_URL", "https://petdor.app")
-
-# -----------------------------
-# Função interna genérica
-# -----------------------------
-def _enviar_email_generico(destinatario: str, assunto: str, corpo_html: str) -> bool:
-    """
-    Envia um e-mail HTML via SMTP.
-    Retorna True se enviado com sucesso.
-    """
-
+# =============================================================
+# Validação automática (antes de enviar)
+# =============================================================
+def validar_config_email():
     if not EMAIL_USER or not EMAIL_PASSWORD:
-        logger.error("❌ EMAIL_USER ou EMAIL_PASSWORD não configurados.")
+        logger.error("❌ EMAIL_USER ou EMAIL_PASSWORD não configurados no .env")
         return False
 
     if not EMAIL_HOST:
-        logger.error("❌ EMAIL_HOST não configurado.")
+        logger.error("❌ EMAIL_HOST não configurado no .env")
         return False
 
-    if not EMAIL_SENDER:
-        logger.error("❌ EMAIL_SENDER vazio. Configure EMAIL_SENDER nas variáveis.")
+    if not EMAIL_PORT:
+        logger.error("❌ EMAIL_PORT não configurado no .env")
         return False
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = assunto
-    msg["From"] = EMAIL_SENDER
-    msg["To"] = destinatario
-    msg.attach(MIMEText(corpo_html, "html"))
+    return True
+
+# =============================================================
+# Template de envio de e-mail de reset de senha
+# =============================================================
+def enviar_email_reset_senha(email_destino, nome, token):
+    """
+    Envia email de redefinição de senha.
+    """
+
+    if not validar_config_email():
+        return False
+
+    reset_link = f"{os.getenv('APP_BASE_URL')}/reset_password?token={token}"
+
+    assunto = "Redefinição de senha - PETDOR"
+    html = f"""
+    <html>
+    <body>
+        <p>Olá <strong>{nome}</strong>,</p>
+        <p>Você solicitou uma redefinição de senha para sua conta no <strong>PETDOR</strong>.</p>
+
+        <p>Clique no link abaixo para redefinir sua senha:</p>
+
+        <p><a href="{reset_link}">{reset_link}</a></p>
+
+        <p>Este link expira em <strong>1 hora</strong>.</p>
+        <br/>
+        <p>Se você não fez esta solicitação, ignore esta mensagem.</p>
+        <br/>
+        <p>Atenciosamente,<br/>Equipe PETDOR</p>
+    </body>
+    </html>
+    """
 
     try:
-        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT) as server:
-            server.starttls()
-            server.login(EMAIL_USER, EMAIL_PASSWORD)
-            server.sendmail(EMAIL_SENDER, destinatario, msg.as_string())
+        msg = MIMEMultipart()
+        msg["From"] = SENDER_EMAIL
+        msg["To"] = email_destino
+        msg["Subject"] = assunto
 
-        logger.info(f"📧 E-mail enviado para {destinatario} - Assunto: {assunto}")
+        msg.attach(MIMEText(html, "html"))
+
+        contexto = ssl.create_default_context()
+
+        with smtplib.SMTP(EMAIL_HOST, int(EMAIL_PORT)) as servidor:
+            servidor.starttls(context=contexto)
+            servidor.login(EMAIL_USER, EMAIL_PASSWORD)
+            servidor.sendmail(SENDER_EMAIL, email_destino, msg.as_string())
+
+        logger.info(f"Email de reset enviado para: {email_destino}")
         return True
 
     except Exception as e:
-        logger.error(f"❌ Erro ao enviar e-mail: {e}", exc_info=True)
+        logger.error(f"Erro ao enviar email para {email_destino}: {e}", exc_info=True)
         return False
-
-
-# -----------------------------
-# CONFIRMAÇÃO DE CONTA
-# -----------------------------
-def enviar_email_confirmacao(destinatario: str, nome_usuario: str, token: str) -> bool:
-    """
-    Envia e-mail de confirmação de conta.
-    """
-    assunto = "🎾 Confirme sua conta no PETDOR"
-
-    # Agora usando o domínio petdor.app
-    confirm_url = f"{APP_BASE_URL}/?confirmar_email=1&token={token}"
-
-    corpo_html = f"""
-    <html>
-        <body style="font-family: Arial; color:#333;">
-            <h2 style="background:#4CAF50; color:white; padding:15px; text-align:center;">
-                Confirmação de Conta PETDOR
-            </h2>
-
-            <p>Olá, <strong>{nome_usuario}</strong>,</p>
-            <p>Obrigado por se cadastrar no <strong>PETDOR</strong>! Clique abaixo para confirmar seu e-mail:</p>
-
-            <p style="text-align:center;">
-                <a href="{confirm_url}" 
-                   style="background:#4CAF50; color:white; padding:12px 25px; border-radius:6px; text-decoration:none;">
-                   Confirmar E-mail
-                </a>
-            </p>
-
-            <p>Ou copie o link:<br>{confirm_url}</p>
-
-            <hr>
-            <p style="text-align:center; color:#666; font-size:12px;">
-                Equipe PETDOR — <a href="{APP_BASE_URL}">{APP_BASE_URL}</a>
-            </p>
-        </body>
-    </html>
-    """
-
-    return _enviar_email_generico(destinatario, assunto, corpo_html)
-
-
-# -----------------------------
-# RESET DE SENHA
-# -----------------------------
-def enviar_email_reset_senha(destinatario: str, nome_usuario: str, token: str) -> bool:
-    """
-    Envia e-mail para redefinição de senha.
-    """
-    assunto = "🔑 Redefinição de Senha - PETDOR"
-
-    reset_url = f"{APP_BASE_URL}/?reset_senha=1&token={token}"
-
-    corpo_html = f"""
-    <html>
-        <body style="font-family: Arial; color:#333;">
-            <h2 style="background:#ff9800; color:white; padding:15px; text-align:center;">
-                Redefinir Senha PETDOR
-            </h2>
-
-            <p>Olá, <strong>{nome_usuario}</strong>,</p>
-            <p>Você solicitou redefinir sua senha. Clique abaixo:</p>
-
-            <p style="text-align:center;">
-                <a href="{reset_url}"
-                   style="background:#ff9800; color:white; padding:12px 25px; border-radius:6px; text-decoration:none;">
-                   Redefinir Senha
-                </a>
-            </p>
-
-            <p>Ou copie o link:<br>{reset_url}</p>
-
-            <p style="background:#fff3cd; border:1px solid #ffeaa7; padding:10px; border-radius:5px;">
-                ⚠️ Este link expira em <strong>1 hora</strong>.
-            </p>
-
-            <hr>
-            <p style="text-align:center; color:#666; font-size:12px;">
-                Equipe PETDOR — <a href="{APP_BASE_URL}">{APP_BASE_URL}</a>
-            </p>
-        </body>
-    </html>
-    """
-
-    return _enviar_email_generico(destinatario, assunto, corpo_html)
-
-
-# -----------------------------
-# TESTE SMTP
-# -----------------------------
-def testar_configuracao_email() -> dict:
-    status = {
-        "EMAIL_HOST": EMAIL_HOST,
-        "EMAIL_PORT": EMAIL_PORT,
-        "EMAIL_USER": EMAIL_USER,
-        "EMAIL_SENDER": EMAIL_SENDER,
-        "APP_BASE_URL": APP_BASE_URL,
-        "configuracoes_ok": all([EMAIL_HOST, EMAIL_USER, EMAIL_PASSWORD]),
-        "conexao_smtp": False
-    }
-
-    if status["configuracoes_ok"]:
-        try:
-            with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT) as server:
-                server.starttls()
-                server.login(EMAIL_USER, EMAIL_PASSWORD)
-                status["conexao_smtp"] = True
-        except Exception as e:
-            status["erro_smtp"] = str(e)
-
-    return status
