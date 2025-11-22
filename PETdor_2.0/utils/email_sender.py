@@ -1,4 +1,4 @@
-# PETdor_2_0/utils/email_sender.py
+# PETdor_2.0/utils/email_sender.py
 """
 Módulo de envio de e-mails do PETDOR.
 Suporta confirmação de conta e redefinição de senha.
@@ -16,14 +16,16 @@ logger = logging.getLogger(__name__)
 # CONFIGURAÇÕES DE E-MAIL
 # -----------------------------
 
-# GoDaddy SMTP correto (caso o usuário não defina por variável de ambiente)
 DEFAULT_GODADDY_SMTP = "smtpout.secureserver.net"
 
 EMAIL_HOST = os.getenv("EMAIL_HOST", DEFAULT_GODADDY_SMTP)
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))  # TLS padrão
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 EMAIL_SENDER = os.getenv("EMAIL_SENDER", "relatorio@petdor.app")
+
+# Domínio oficial do sistema (petdor.app)
+APP_BASE_URL = os.getenv("APP_BASE_URL", "https://petdor.app")
 
 # -----------------------------
 # Função interna genérica
@@ -34,7 +36,6 @@ def _enviar_email_generico(destinatario: str, assunto: str, corpo_html: str) -> 
     Retorna True se enviado com sucesso.
     """
 
-    # Verificação básica de configuração
     if not EMAIL_USER or not EMAIL_PASSWORD:
         logger.error("❌ EMAIL_USER ou EMAIL_PASSWORD não configurados.")
         return False
@@ -47,38 +48,23 @@ def _enviar_email_generico(destinatario: str, assunto: str, corpo_html: str) -> 
         logger.error("❌ EMAIL_SENDER vazio. Configure EMAIL_SENDER nas variáveis.")
         return False
 
-    # Monta mensagem
     msg = MIMEMultipart("alternative")
     msg["Subject"] = assunto
     msg["From"] = EMAIL_SENDER
     msg["To"] = destinatario
-
-    # Corpo HTML
     msg.attach(MIMEText(corpo_html, "html"))
 
     try:
         with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT) as server:
-            server.starttls()             # Godaddy exige STARTTLS
+            server.starttls()
             server.login(EMAIL_USER, EMAIL_PASSWORD)
             server.sendmail(EMAIL_SENDER, destinatario, msg.as_string())
 
         logger.info(f"📧 E-mail enviado para {destinatario} - Assunto: {assunto}")
         return True
 
-    except smtplib.SMTPAuthenticationError as e:
-        logger.error(f"❌ Falha de autenticação SMTP: {e}")
-        return False
-
-    except smtplib.SMTPConnectError as e:
-        logger.error(f"❌ Erro de conexão SMTP: {e}")
-        return False
-
-    except smtplib.SMTPRecipientsRefused as e:
-        logger.error(f"❌ Destinatário recusado: {destinatario} | Erro: {e}")
-        return False
-
     except Exception as e:
-        logger.error(f"❌ Erro geral ao enviar e-mail: {e}", exc_info=True)
+        logger.error(f"❌ Erro ao enviar e-mail: {e}", exc_info=True)
         return False
 
 
@@ -90,7 +76,9 @@ def enviar_email_confirmacao(destinatario: str, nome_usuario: str, token: str) -
     Envia e-mail de confirmação de conta.
     """
     assunto = "🎾 Confirme sua conta no PETDOR"
-    confirm_url = f"https://petdor.streamlit.app/confirmar_email?token={token}"
+
+    # Agora usando o domínio petdor.app
+    confirm_url = f"{APP_BASE_URL}/?confirmar_email=1&token={token}"
 
     corpo_html = f"""
     <html>
@@ -113,7 +101,7 @@ def enviar_email_confirmacao(destinatario: str, nome_usuario: str, token: str) -
 
             <hr>
             <p style="text-align:center; color:#666; font-size:12px;">
-                Equipe PETDOR — <a href="https://petdor.streamlit.app">petdor.streamlit.app</a>
+                Equipe PETDOR — <a href="{APP_BASE_URL}">{APP_BASE_URL}</a>
             </p>
         </body>
     </html>
@@ -130,7 +118,8 @@ def enviar_email_reset_senha(destinatario: str, nome_usuario: str, token: str) -
     Envia e-mail para redefinição de senha.
     """
     assunto = "🔑 Redefinição de Senha - PETDOR"
-    reset_url = f"https://petdor.streamlit.app/redefinir_senha?token={token}"
+
+    reset_url = f"{APP_BASE_URL}/?reset_senha=1&token={token}"
 
     corpo_html = f"""
     <html>
@@ -157,7 +146,7 @@ def enviar_email_reset_senha(destinatario: str, nome_usuario: str, token: str) -
 
             <hr>
             <p style="text-align:center; color:#666; font-size:12px;">
-                Equipe PETDOR — <a href="https://petdor.streamlit.app">petdor.streamlit.app</a>
+                Equipe PETDOR — <a href="{APP_BASE_URL}">{APP_BASE_URL}</a>
             </p>
         </body>
     </html>
@@ -167,18 +156,15 @@ def enviar_email_reset_senha(destinatario: str, nome_usuario: str, token: str) -
 
 
 # -----------------------------
-# TESTE DE CONFIGURAÇÃO SMTP
+# TESTE SMTP
 # -----------------------------
 def testar_configuracao_email() -> dict:
-    """
-    Testa a conexão com o servidor de e-mail.
-    Útil para debug via Streamlit.
-    """
     status = {
         "EMAIL_HOST": EMAIL_HOST,
         "EMAIL_PORT": EMAIL_PORT,
         "EMAIL_USER": EMAIL_USER,
         "EMAIL_SENDER": EMAIL_SENDER,
+        "APP_BASE_URL": APP_BASE_URL,
         "configuracoes_ok": all([EMAIL_HOST, EMAIL_USER, EMAIL_PASSWORD]),
         "conexao_smtp": False
     }
