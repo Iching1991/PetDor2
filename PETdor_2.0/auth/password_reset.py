@@ -1,14 +1,18 @@
-# PETdor_2_0/auth/password_reset.py
+# PETdor_2_0/auth/password_reset.py (REWRITE COMPLETO PARA SUPABASE)
 
 import logging
 from datetime import datetime, timedelta
 import uuid
+import os
 
 from database.connection import conectar_db
-from utils.email_sender import enviar_email_reset_senha  # NOME CORRETO!
+from utils.email_sender import enviar_email_reset_senha
+from auth.security import hash_password
 
 logger = logging.getLogger(__name__)
 
+# Detecta se está usando PostgreSQL (Supabase)
+USANDO_POSTGRES = bool(os.getenv("DB_HOST"))
 
 # ============================================================
 # 1) SOLICITAR RESET DE SENHA
@@ -16,48 +20,42 @@ logger = logging.getLogger(__name__)
 def solicitar_reset_senha(email: str):
     """
     Gera token de redefinição de senha, salva no banco
-    e envia o e-mail com o link para o usuário.
+    e envia o e-mail com o link.
     """
     conn = None
     try:
         conn = conectar_db()
-        conn.row_factory = sqlite_dict  # Permite acessar por chave
         cur = conn.cursor()
 
-        cur.execute("SELECT * FROM usuarios WHERE email = ?", (email,))
+        sql_select = (
+            "SELECT id, nome, email FROM usuarios WHERE email = %s"
+            if USANDO_POSTGRES else
+            "SELECT id, nome, email FROM usuarios WHERE email = ?"
+        )
+        cur.execute(sql_select, (email,))
         usuario = cur.fetchone()
 
         if not usuario:
-            # Segurança: nunca dizer que o e-mail não existe
             logger.warning(f"Tentativa de reset para email inexistente: {email}")
             return True
 
-        # Gera token único
         token = str(uuid.uuid4())
-        expires_at = datetime.now() + timedelta(hours=1)
+        expires_at = datetime.utcnow() + timedelta(hours=1)
 
-        cur.execute("""
-            UPDATE usuarios
-            SET reset_password_token = ?, reset_password_expires = ?
-            WHERE id = ?
-        """, (token, expires_at.strftime("%Y-%m-%d %H:%M:%S"), usuario["id"]))
-
+        sql_update = (
+            "UPDATE usuarios SET reset_password_token=%s, reset_password_expires=%s WHERE id=%s"
+            if USANDO_POSTGRES else
+            "UPDATE usuarios SET reset_password_token=?, reset_password_expires=? WHERE id=?"
+        )
+        cur.execute(sql_update, (token, expires_at, usuario[0]))
         conn.commit()
 
-        # Envia o e-mail
-        enviado = enviar_email_reset_senha(usuario["email"], usuario["nome"], token)
-
-        if enviado:
-            logger.info(f"Token enviado para: {email}")
-            return True
-        else:
-            logger.error(f"Erro ao enviar email para: {email}")
-            return False
+        enviado = enviar_email_reset_senha(usuario[2], usuario[1], token)
+        return True if enviado else False
 
     except Exception as e:
         logger.error(f"Erro no reset de senha ({email}): {e}", exc_info=True)
         return False
-
     finally:
         if conn:
             conn.close()
@@ -68,73 +66,62 @@ def solicitar_reset_senha(email: str):
 # ============================================================
 def validar_token_reset(token: str):
     """
-    Retorna o e-mail se o token for válido e não estiver expirado.
-    Caso contrário, retorna None.
+    Retorna o e-mail se o token for válido.
     """
     conn = None
     try:
         conn = conectar_db()
-        conn.row_factory = sqlite_dict
         cur = conn.cursor()
 
-        cur.execute("""
-            SELECT email, reset_password_expires
-            FROM usuarios
-            WHERE reset_password_token = ?
-        """, (token,))
+        sql = (
+            "SELECT email, reset_password_expires FROM usuarios WHERE reset_password_token=%s"
+            if USANDO_POSTGRES else
+            "SELECT email, reset_password_expires FROM usuarios WHERE reset_password_token=?"
+        )
+        cur.execute(sql, (token,))
         usuario = cur.fetchone()
 
         if not usuario:
             return None
 
-        # Converter string para datetime
-        expires = datetime.strptime(usuario["reset_password_expires"], "%Y-%m-%d %H:%M:%S")
-
-        if expires < datetime.now():
-            logger.warning(f"Token expirado para email: {usuario['email']}")
+        expires = usuario[1]
+        if expires < datetime.utcnow():
             return None
 
-        return usuario["email"]
+        return usuario[0]
 
     except Exception as e:
         logger.error(f"Erro ao validar token: {e}", exc_info=True)
         return None
-
     finally:
         if conn:
             conn.close()
 
 
 # ============================================================
-# 3) REDEFINIR SENHA COM TOKEN
+# 3) REDEFINIR SENHA VIA TOKEN
 # ============================================================
 def redefinir_senha_com_token(token: str, nova_senha: str):
     """
-    Redefine a senha usando um token válido.
+    Redefine a senha com um token válido.
     """
     conn = None
     try:
         email = validar_token_reset(token)
-
         if not email:
             return False, "Token inválido ou expirado."
 
-        # Import aqui para evitar import circular
-        from .user import redefinir_senha
-        sucesso, msg = redefinir_senha(email, nova_senha)
+        nova_hash = hash_password(nova_senha)
 
-        if not sucesso:
-            return False, msg
-
-        # Limpa o token
         conn = conectar_db()
         cur = conn.cursor()
-        cur.execute("""
-            UPDATE usuarios
-            SET reset_password_token = NULL,
-                reset_password_expires = NULL
-            WHERE email = ?
-        """, (email,))
+
+        sql_update = (
+            "UPDATE usuarios SET senha_hash=%s, reset_password_token=NULL, reset_password_expires=NULL WHERE email=%s"
+            if USANDO_POSTGRES else
+            "UPDATE usuarios SET senha_hash=?, reset_password_token=NULL, reset_password_expires=NULL WHERE email=?"
+        )
+        cur.execute(sql_update, (nova_hash, email))
         conn.commit()
 
         return True, "Senha redefinida com sucesso!"
@@ -142,15 +129,6 @@ def redefinir_senha_com_token(token: str, nova_senha: str):
     except Exception as e:
         logger.error(f"Erro ao redefinir senha: {e}", exc_info=True)
         return False, "Erro interno ao redefinir senha."
-
     finally:
         if conn:
             conn.close()
-
-
-# ============================================================
-# UTILIDADE: Row Factory para SQLite -> dict
-# ============================================================
-def sqlite_dict(cursor, row):
-    """Converte rows em dict acessível por chave."""
-    return {col[0]: row[idx] for idx, col in enumerate(cursor.description)}
