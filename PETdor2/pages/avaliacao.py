@@ -6,23 +6,30 @@ import streamlit as st
 from datetime import datetime
 import json
 
-# --- Corrige importações para Streamlit Cloud ---
+# ============================================
+# Correção de caminho para Streamlit Cloud
+# ============================================
 current_dir = os.path.dirname(os.path.abspath(__file__))
-root_dir = os.path.abspath(os.path.join(current_dir, ".."))
+root_dir = os.path.abspath(os.path.join(current_dir, ".."))  # raiz: PETdor2/
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
-# --- Fim correção ---
 
-# Importações locais
+# ============================================
+# Importações locais (agora funcionam no Cloud)
+# ============================================
 from database.connection import conectar_db
 from database.models import Pet
-from especies.index import get_especies_nomes, buscar_especie_por_id, get_escala_labels
+from especies.index import (
+    get_especies_nomes,
+    buscar_especie_por_id,
+    get_escala_labels
+)
 
 # ==========================================================
 # Funções de acesso ao banco
 # ==========================================================
 def carregar_pets_do_usuario(usuario_id: int) -> list[dict]:
-    """Retorna uma lista de pets cadastrados para o usuário."""
+    """Retorna todos os pets cadastrados pelo usuário."""
     conn = conectar_db()
     cur = conn.cursor()
     cur.execute("""
@@ -37,24 +44,35 @@ def carregar_pets_do_usuario(usuario_id: int) -> list[dict]:
 
 
 def salvar_avaliacao(pet_id: int, usuario_id: int, especie: str, respostas_json: str, pontuacao_total: int):
-    """Salva uma avaliação no banco de dados."""
+    """Salva a avaliação na tabela `avaliacoes`."""
     conn = conectar_db()
     cur = conn.cursor()
+
     cur.execute("""
         INSERT INTO avaliacoes (
-            pet_id, usuario_id, especie, respostas_json, pontuacao_total, criado_em
+            pet_id, usuario_id, especie,
+            respostas_json, pontuacao_total, criado_em
         )
         VALUES (?, ?, ?, ?, ?, ?)
-    """, (pet_id, usuario_id, especie, respostas_json, pontuacao_total, datetime.now()))
+    """, (
+        pet_id,
+        usuario_id,
+        especie,
+        respostas_json,
+        pontuacao_total,
+        datetime.now()
+    ))
+
     conn.commit()
     conn.close()
 
 
 # ==========================================================
-# Interface principal da página
+# Interface principal
 # ==========================================================
 def render():
     usuario = st.session_state.get("usuario")
+
     st.title("📋 Avaliação de Dor")
 
     if not usuario:
@@ -64,27 +82,34 @@ def render():
     usuario_id = usuario["id"]
 
     # ----------------------------
-    # Seleção do PET
+    # Selecionar PET
     # ----------------------------
     st.subheader("🐾 Selecione o Pet")
+
     pets = carregar_pets_do_usuario(usuario_id)
 
     if not pets:
         st.info("Você ainda não cadastrou nenhum pet.")
         return
 
-    pet_opcoes = {f"{p['nome']} ({p['especie']})": p["id"] for p in pets}
-    pet_escolhido = st.selectbox("Escolha o pet:", list(pet_opcoes.keys()))
-    pet_id = pet_opcoes[pet_escolhido]
+    opcoes_pet = {
+        f"{p['nome']} ({p['especie']})": p["id"]
+        for p in pets
+    }
+
+    escolha_pet = st.selectbox("Escolha o pet:", list(opcoes_pet.keys()))
+    pet_id = opcoes_pet[escolha_pet]
 
     especie = next((p["especie"] for p in pets if p["id"] == pet_id), None)
+
     if not especie:
-        st.error("Erro ao identificar a espécie do pet.")
+        st.error("⚠ Não foi possível identificar a espécie do pet.")
         return
 
     especie_cfg = buscar_especie_por_id(especie)
+
     if not especie_cfg:
-        st.error(f"A espécie '{especie}' não possui escala configurada.")
+        st.error(f"⚠ A espécie '{especie}' não possui escala configurada.")
         return
 
     st.subheader(f"🐶 Avaliação para espécie: **{especie}**")
@@ -94,19 +119,25 @@ def render():
     pontuacao_total = 0
 
     # ----------------------------
-    # Loop de categorias e perguntas
+    # Loop das perguntas
     # ----------------------------
     for categoria in categorias:
         st.markdown(f"### 🔹 {categoria['nome']}")
+
         for pergunta in categoria.get("perguntas", []):
             texto = pergunta["texto"]
             labels = get_escala_labels(pergunta["escala"])
 
-            escolha = st.radio(texto, labels, key=f"{categoria['nome']}_{texto}")
+            escolha = st.radio(
+                texto,
+                labels,
+                key=f"{categoria['nome']}_{texto}"
+            )
+
             respostas[texto] = escolha
             pontuacao_total += labels.index(escolha)
 
-        st.markdown("---")
+        st.divider()
 
     st.markdown(f"## 🧮 Pontuação Total: **{pontuacao_total}**")
 
@@ -115,5 +146,11 @@ def render():
     # ----------------------------
     if st.button("Salvar Avaliação"):
         respostas_json = json.dumps(respostas, ensure_ascii=False)
-        salvar_avaliacao(pet_id, usuario_id, especie, respostas_json, pontuacao_total)
-        st.success("Avaliação salva com sucesso!")
+        salvar_avaliacao(
+            pet_id,
+            usuario_id,
+            especie,
+            respostas_json,
+            pontuacao_total
+        )
+        st.success("Avaliação salva com sucesso! ✅")
