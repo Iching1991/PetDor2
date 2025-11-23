@@ -1,14 +1,13 @@
-# PETdor_2_0/database/migration.py
-import sqlite3
-import os
-from database.connection import conectar_db
+# PETdor2/database/migration.py
 
+import os
+from PETdor2.database.connection import conectar_db
 
 USANDO_POSTGRES = bool(os.getenv("DB_HOST"))
 
 
 # ==========================================================
-# Criar tabelas da estrutura híbrida
+# Criar tabelas principais (usuários, pets, avaliações)
 # ==========================================================
 def criar_tabelas():
     conn = conectar_db()
@@ -20,7 +19,7 @@ def criar_tabelas():
     if USANDO_POSTGRES:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS usuarios (
-                id BIGSERIAL PRIMARY KEY,
+                id SERIAL PRIMARY KEY,
                 nome TEXT NOT NULL,
                 email TEXT UNIQUE NOT NULL,
                 senha_hash TEXT NOT NULL,
@@ -30,14 +29,14 @@ def criar_tabelas():
                 email_confirmado BOOLEAN NOT NULL DEFAULT FALSE,
                 email_confirm_token TEXT UNIQUE,
 
-                reset_password_token TEXT UNIQUE,
+                reset_password_token TEXT,
                 reset_password_expires TIMESTAMPTZ,
 
                 ativo BOOLEAN NOT NULL DEFAULT TRUE,
                 criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
             );
         """)
-    else:
+    else:  # SQLite
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS usuarios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -59,85 +58,129 @@ def criar_tabelas():
         """)
 
     # -------------------------------
-    # LOG — Confirmação de E-mail
+    # LOG — Confirmação de e-mail
     # -------------------------------
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS email_confirmacoes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER NOT NULL,
-            token TEXT NOT NULL,
-            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            expirado INTEGER DEFAULT 0,
-            FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-        );
-    """)
+    if USANDO_POSTGRES:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS email_confirmacoes (
+                id SERIAL PRIMARY KEY,
+                usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+                token TEXT NOT NULL,
+                criado_em TIMESTAMPTZ DEFAULT NOW(),
+                expirado BOOLEAN DEFAULT FALSE
+            );
+        """)
+    else:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS email_confirmacoes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                usuario_id INTEGER NOT NULL,
+                token TEXT NOT NULL,
+                criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expirado INTEGER DEFAULT 0,
+                FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+            );
+        """)
 
     # -------------------------------
-    # LOG — Resets de Senha
+    # LOG — Resets de senha
     # -------------------------------
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS password_resets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            usuario_id INTEGER NOT NULL,
-            token TEXT NOT NULL,
-            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            utilizado INTEGER DEFAULT 0,
-            FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-        );
-    """)
+    if USANDO_POSTGRES:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS password_resets (
+                id SERIAL PRIMARY KEY,
+                usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+                token TEXT NOT NULL,
+                criado_em TIMESTAMPTZ DEFAULT NOW(),
+                utilizado BOOLEAN DEFAULT FALSE
+            );
+        """)
+    else:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS password_resets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                usuario_id INTEGER NOT NULL,
+                token TEXT NOT NULL,
+                criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                utilizado INTEGER DEFAULT 0,
+                FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+            );
+        """)
 
     # -------------------------------
     # Tabela de Pets
     # -------------------------------
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS pets (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nome TEXT NOT NULL,
-            especie TEXT NOT NULL,
-            idade INTEGER,
-            peso REAL,
-            tutor_id INTEGER NOT NULL,
-            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (tutor_id) REFERENCES usuarios(id)
-        );
-    """)
+    if USANDO_POSTGRES:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pets (
+                id SERIAL PRIMARY KEY,
+                nome TEXT NOT NULL,
+                especie TEXT NOT NULL,
+                idade INTEGER,
+                peso REAL,
+                tutor_id INTEGER NOT NULL REFERENCES usuarios(id),
+                criado_em TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+    else:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nome TEXT NOT NULL,
+                especie TEXT NOT NULL,
+                idade INTEGER,
+                peso REAL,
+                tutor_id INTEGER NOT NULL,
+                criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (tutor_id) REFERENCES usuarios(id)
+            );
+        """)
 
     # -------------------------------
-    # Tabela de Avaliações
+    # Tabela Avaliações
     # -------------------------------
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS avaliacoes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            pet_id INTEGER NOT NULL,
-            usuario_id INTEGER NOT NULL,
-            especie TEXT NOT NULL,
-            respostas_json TEXT NOT NULL,
-            pontuacao_total REAL NOT NULL,
-            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (pet_id) REFERENCES pets(id),
-            FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
-        );
-    """)
+    if USANDO_POSTGRES:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS avaliacoes (
+                id SERIAL PRIMARY KEY,
+                pet_id INTEGER NOT NULL REFERENCES pets(id),
+                usuario_id INTEGER NOT NULL REFERENCES usuarios(id),
+                especie TEXT NOT NULL,
+                respostas_json TEXT NOT NULL,
+                pontuacao_total REAL NOT NULL,
+                criado_em TIMESTAMPTZ DEFAULT NOW()
+            );
+        """)
+    else:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS avaliacoes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pet_id INTEGER NOT NULL,
+                usuario_id INTEGER NOT NULL,
+                especie TEXT NOT NULL,
+                respostas_json TEXT NOT NULL,
+                pontuacao_total REAL NOT NULL,
+                criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (pet_id) REFERENCES pets(id),
+                FOREIGN KEY (usuario_id) REFERENCES usuarios(id)
+            );
+        """)
 
     conn.commit()
     conn.close()
-    print("✔ Banco atualizado: tabelas principais e de log criadas com sucesso.")
+    print("✔ Banco atualizado: tabelas criadas/validadas com sucesso.")
 
 
 # ==========================================================
 # Migração completa
 # ==========================================================
 def migrar_banco_completo():
-    """
-    Executa todas as migrações necessárias.
-    Não reseta o banco automaticamente.
-    """
     criar_tabelas()
-    print("✔ Migração completa executada com sucesso.")
+    print("✔ Migração completa executada.")
 
 
 # ==========================================================
-# Resetar banco (apenas desenvolvedor)
+# Reset total do banco (apenas DEV)
 # ==========================================================
 def resetar_banco():
     conn = conectar_db()
@@ -151,4 +194,4 @@ def resetar_banco():
 
     conn.commit()
     conn.close()
-    print("⚠ Banco resetado (DEV).")
+    print("⚠ Banco resetado (modo DEV).")
