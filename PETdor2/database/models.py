@@ -1,14 +1,13 @@
 # PETdor2/database/models.py
 from dataclasses import dataclass
 from typing import Optional
-from .supabase_client import supabase
 import logging
 
 logger = logging.getLogger(__name__)
 
-# ----------------------------
-# Dataclasses
-# ----------------------------
+# ==============================
+# DATACLASSES
+# ==============================
 @dataclass
 class Usuario:
     id: int
@@ -31,13 +30,21 @@ class Pet:
     peso: Optional[float] = None
     criado_em: Optional[str] = None
 
-# ----------------------------
-# Funções de acesso a usuários
-# ----------------------------
+# ==============================
+# FUNÇÕES DE BUSCA
+# ==============================
+
 def buscar_usuario_por_email(email: str) -> Optional[Usuario]:
+    """
+    Busca um usuário no Supabase pelo e-mail.
+    Retorna um objeto Usuario ou None.
+    """
     try:
+        # Importação local evita ciclo de importação
+        from .supabase_client import supabase
+
         resp = supabase.table("usuarios").select("*").eq("email", email).execute()
-        if resp.error or not resp.data:
+        if not resp.data:
             return None
         row = resp.data[0]
         return Usuario(
@@ -56,9 +63,15 @@ def buscar_usuario_por_email(email: str) -> Optional[Usuario]:
         return None
 
 def buscar_usuario_por_id(user_id: int) -> Optional[Usuario]:
+    """
+    Busca um usuário no Supabase pelo ID.
+    Retorna um objeto Usuario ou None.
+    """
     try:
+        from .supabase_client import supabase
+
         resp = supabase.table("usuarios").select("*").eq("id", user_id).execute()
-        if resp.error or not resp.data:
+        if not resp.data:
             return None
         row = resp.data[0]
         return Usuario(
@@ -73,16 +86,19 @@ def buscar_usuario_por_id(user_id: int) -> Optional[Usuario]:
             criado_em=row["data_cadastro"]
         )
     except Exception as e:
-        logger.error(f"Erro ao buscar usuário por ID {user_id}: {e}")
+        logger.error(f"Erro ao buscar usuário por id {user_id}: {e}")
         return None
 
-# ----------------------------
-# Funções de acesso a pets
-# ----------------------------
 def buscar_pet_por_id(pet_id: int) -> Optional[Pet]:
+    """
+    Busca um pet no Supabase pelo ID.
+    Retorna um objeto Pet ou None.
+    """
     try:
+        from .supabase_client import supabase
+
         resp = supabase.table("pets").select("*").eq("id", pet_id).execute()
-        if resp.error or not resp.data:
+        if not resp.data:
             return None
         row = resp.data[0]
         return Pet(
@@ -95,5 +111,5 @@ def buscar_pet_por_id(pet_id: int) -> Optional[Pet]:
             criado_em=row.get("data_cadastro")
         )
     except Exception as e:
-        logger.error(f"Erro ao buscar pet por ID {pet_id}: {e}")
+        logger.error(f"Erro ao buscar pet por id {pet_id}: {e}")
         return None
