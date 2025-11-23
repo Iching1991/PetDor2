@@ -193,4 +193,3 @@ if st.session_state.get("logged_in"):
     if st.sidebar.button("Sair"):
         st.session_state.clear()
         st.rerun()
-
