@@ -25,6 +25,19 @@ def placeholder():
 
 
 # ==========================================================
+# Função universal para acessar row (dict / sqlite.Row / tuple)
+# ==========================================================
+def safe_get(row, key, index):
+    if row is None:
+        return None
+    if isinstance(row, dict):
+        return row.get(key)
+    if hasattr(row, "keys"):  # sqlite.Row
+        return row[key]
+    return row[index]
+
+
+# ==========================================================
 # Criar tabela se não existir
 # ==========================================================
 def criar_tabelas_se_nao_existir():
@@ -77,7 +90,7 @@ def criar_tabelas_se_nao_existir():
 
 
 # ==========================================================
-# Cadastro de usuário com token JWT de confirmação
+# Cadastro
 # ==========================================================
 def cadastrar_usuario(nome, email, senha, tipo_usuario="Tutor", pais="Brasil") -> tuple:
     conn = None
@@ -102,7 +115,6 @@ def cadastrar_usuario(nome, email, senha, tipo_usuario="Tutor", pais="Brasil") -
         cur.execute(sql, (nome, email, senha_hash, tipo_usuario, pais, token))
         conn.commit()
 
-        # Envia e-mail de confirmação
         if not enviar_email_confirmacao(email, nome, token):
             logger.error("Falha ao enviar e-mail de confirmação.")
             return True, "Conta criada, mas não foi possível enviar o e-mail de confirmação."
@@ -125,7 +137,7 @@ def cadastrar_usuario(nome, email, senha, tipo_usuario="Tutor", pais="Brasil") -
 
 
 # ==========================================================
-# Login / Verificação de credenciais
+# Login
 # ==========================================================
 def verificar_credenciais(email, senha):
     conn = None
@@ -142,13 +154,10 @@ def verificar_credenciais(email, senha):
         if not row:
             return False, "E-mail ou senha incorretos."
 
-        # Adaptar para SQLite Row ou dict (PostgreSQL)
-        is_dict = isinstance(row, dict)
-        get = lambda k, idx: row[k] if is_dict else row[idx]
-
-        confirmado = get("email_confirmado", 6)
-        senha_hash = get("senha_hash", 3)
-        ativo = get("ativo", 9)
+        # Mapeamento universal
+        confirmado = safe_get(row, "email_confirmado", 6)
+        senha_hash = safe_get(row, "senha_hash", 3)
+        ativo = safe_get(row, "ativo", 9)
 
         if not confirmado:
             return False, "Confirme seu e-mail antes de entrar."
@@ -161,7 +170,7 @@ def verificar_credenciais(email, senha):
 
         return True, row
 
-    except Exception as e:
+    except Exception:
         logger.error("Erro em verificar_credenciais", exc_info=True)
         return False, "Erro interno no login."
 
@@ -171,7 +180,7 @@ def verificar_credenciais(email, senha):
 
 
 # ==========================================================
-# Buscar usuário por e-mail
+# Buscar usuário
 # ==========================================================
 def buscar_usuario_por_email(email):
     conn = conectar_db()
@@ -186,7 +195,7 @@ def buscar_usuario_por_email(email):
 
 
 # ==========================================================
-# Confirmação de e-mail via JWT
+# Confirmação via JWT
 # ==========================================================
 def confirmar_email(token):
     from PETdor2.auth.email_confirmation import confirmar_email as confirmar_fn
@@ -224,7 +233,7 @@ def redefinir_senha(email, nova_senha):
 
 
 # ==========================================================
-# Administração — listar usuários
+# Admin — listar
 # ==========================================================
 def buscar_todos_usuarios():
     conn = conectar_db()
@@ -243,7 +252,7 @@ def buscar_todos_usuarios():
 
 
 # ==========================================================
-# Administração — ativar/desativar
+# Admin — ativar/desativar
 # ==========================================================
 def atualizar_status_usuario(user_id, ativo):
     conn = conectar_db()
@@ -258,7 +267,7 @@ def atualizar_status_usuario(user_id, ativo):
 
 
 # ==========================================================
-# Administração — atualizar tipo (Tutor / Veterinário)
+# Admin — atualizar tipo
 # ==========================================================
 def atualizar_tipo_usuario(user_id, tipo_usuario):
     conn = conectar_db()
