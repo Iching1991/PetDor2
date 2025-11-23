@@ -2,7 +2,6 @@
 import logging
 from datetime import datetime, timedelta
 import os
-from database.supabase_client import supabase
 from auth.security import generate_reset_token, verify_reset_token, hash_password
 from utils.email_sender import enviar_email_recuperacao_senha
 
@@ -15,6 +14,7 @@ def solicitar_reset_senha(email):
     """
     Gera um token de redefinição de senha para o e-mail fornecido e envia um e-mail.
     """
+    from database.supabase_client import supabase  # import local para evitar ciclo
     # 1. Buscar usuário no Supabase
     resp = supabase.table("usuarios").select("*").eq("email", email).execute()
     if resp.error:
@@ -63,6 +63,7 @@ def validar_token_reset(token):
     Verifica se um token de redefinição de senha é válido e não expirou.
     Retorna (True, mensagem, email_usuario) ou (False, mensagem, None)
     """
+    from database.supabase_client import supabase  # import local
     resp = supabase.table("usuarios").select("*").eq("reset_password_token", token).execute()
     if resp.error or not resp.data:
         logger.warning(f"Tentativa de validação com token inválido: {token}")
@@ -84,6 +85,7 @@ def redefinir_senha_com_token(token, nova_senha):
     """
     Redefine a senha de um usuário usando um token válido.
     """
+    from database.supabase_client import supabase  # import local
     # 1. Validar token
     token_valido, msg, email_usuario = validar_token_reset(token)
     if not token_valido:
