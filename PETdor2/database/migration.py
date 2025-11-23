@@ -7,13 +7,11 @@ logger = logging.getLogger(__name__)
 
 def migrar_banco_completo():
     """
-    Cria/verifica todas as tabelas necessárias no Supabase.
-    Nota: Supabase é baseado em PostgreSQL, mas a criação de tabelas
-    deve ser feita via SQL direto ou dashboard. Aqui usamos execuções SQL.
+    Cria/verifica tabelas necessárias no Supabase.
     """
     try:
-        # Tabela de usuários
-        sql_usuarios = """
+        # Usuários
+        supabase.rpc("exec_sql", {"query": """
         CREATE TABLE IF NOT EXISTS usuarios (
             id SERIAL PRIMARY KEY,
             nome TEXT NOT NULL,
@@ -28,12 +26,10 @@ def migrar_banco_completo():
             reset_password_token TEXT UNIQUE,
             reset_password_expires TIMESTAMPTZ
         );
-        """
-        supabase.rpc("exec_sql", {"query": sql_usuarios}).execute()
-        logger.info("Tabela 'usuarios' verificada/criada.")
+        """}).execute()
 
-        # Tabela de pets
-        sql_pets = """
+        # Pets
+        supabase.rpc("exec_sql", {"query": """
         CREATE TABLE IF NOT EXISTS pets (
             id SERIAL PRIMARY KEY,
             nome TEXT NOT NULL,
@@ -43,12 +39,10 @@ def migrar_banco_completo():
             id_usuario INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
             data_cadastro TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
-        """
-        supabase.rpc("exec_sql", {"query": sql_pets}).execute()
-        logger.info("Tabela 'pets' verificada/criada.")
+        """}).execute()
 
-        # Tabela de avaliações
-        sql_avaliacoes = """
+        # Avaliações
+        supabase.rpc("exec_sql", {"query": """
         CREATE TABLE IF NOT EXISTS avaliacoes (
             id SERIAL PRIMARY KEY,
             id_pet INTEGER REFERENCES pets(id) ON DELETE CASCADE,
@@ -56,12 +50,10 @@ def migrar_banco_completo():
             pontuacao_total INTEGER NOT NULL,
             observacoes TEXT
         );
-        """
-        supabase.rpc("exec_sql", {"query": sql_avaliacoes}).execute()
-        logger.info("Tabela 'avaliacoes' verificada/criada.")
+        """}).execute()
 
-        # Tabela de backups
-        sql_backups = """
+        # Backups
+        supabase.rpc("exec_sql", {"query": """
         CREATE TABLE IF NOT EXISTS backups (
             id SERIAL PRIMARY KEY,
             nome_arquivo TEXT NOT NULL,
@@ -69,13 +61,11 @@ def migrar_banco_completo():
             tamanho_bytes INTEGER,
             caminho_armazenamento TEXT
         );
-        """
-        supabase.rpc("exec_sql", {"query": sql_backups}).execute()
-        logger.info("Tabela 'backups' verificada/criada.")
+        """}).execute()
 
         logger.info("Migração do banco de dados concluída com sucesso.")
 
     except Exception as e:
-        logger.error(f"Erro ao migrar o banco de dados no Supabase: {e}", exc_info=True)
+        logger.error(f"Erro ao migrar banco de dados Supabase: {e}", exc_info=True)
         st.error(f"Erro crítico ao inicializar o banco de dados. Detalhes: {e}")
         st.stop()
