@@ -1,10 +1,12 @@
 # PETdor2/auth/__init__.py
 """Módulo de autenticação e segurança do PETDOR."""
 
-from PETdor2.auth import user
-from PETdor2.auth import password_reset
-from PETdor2.auth import email_confirmation
-from PETdor2.auth import security
+# Importações explícitas dos submódulos do pacote auth
+from . import user
+from . import security
+from . import password_reset
+from . import email_confirmation
+
 
 __all__ = [
     "user",
@@ -12,3 +14,4 @@ __all__ = [
     "email_confirmation",
     "security",
 ]
+
