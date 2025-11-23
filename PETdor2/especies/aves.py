@@ -1,18 +1,25 @@
 # PETdor_2.0/especies/aves.py
 
 """
-🦜 Configuração de avaliação para AVES
-Escala: 0 a 7 — com base em observação comportamental geral.
+🦜 Configuração de avaliação para AVES.
+Escala: 0 a 7 — baseada em observação comportamental geral.
 """
-from especies.index import EspecieConfig, Pergunta
+
+from .index import EspecieConfig, Pergunta  # Importação relativa correta
 
 CONFIG_AVES = EspecieConfig(
     nome="Aves",
-    especie_id="aves", # <-- Adicionado o campo especie_id aqui!
+    especie_id="aves",
     descricao="Avaliação de dor em aves — Escala de 0 (nunca) a 7 (sempre).",
     opcoes_escala=[
-        "0 - Nunca", "1 - Raramente", "2 - Às vezes", "3 - Frequentemente",
-        "4 - Quase Sempre", "5 - Sempre", "6 - Muito Frequente", "7 - Constante"
+        "0 - Nunca",
+        "1 - Raramente",
+        "2 - Às vezes",
+        "3 - Frequentemente",
+        "4 - Quase Sempre",
+        "5 - Sempre",
+        "6 - Muito Frequente",
+        "7 - Constante",
     ],
     perguntas=[
         # Postura e Mobilidade
@@ -30,5 +37,5 @@ CONFIG_AVES = EspecieConfig(
         # Aparência
         Pergunta(texto="Minha ave está com penas eriçadas ou desalinhadas", invertida=False, peso=1.0),
         Pergunta(texto="Minha ave fica muito tempo parada no mesmo lugar", invertida=False, peso=1.0),
-    ]
+    ],
 )
