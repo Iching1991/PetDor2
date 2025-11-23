@@ -1,20 +1,22 @@
 # PETdor2/streamlit_app.py
-import streamlit as st
 import sys
 import os
+import streamlit as st
 
 # --- Corrige importações para Streamlit Cloud ---
-current_script_dir = os.path.dirname(os.path.abspath(__file__))
-if current_script_dir not in sys.path:
-    sys.path.insert(0, current_script_dir)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+root_dir = os.path.abspath(os.path.join(current_dir, "."))
+if root_dir not in sys.path:
+    sys.path.insert(0, root_dir)
 # --- Fim correção ---
 
-# Importações de banco e auth
+# ===========================
+# Imports de banco e auth
+# ===========================
 from database.migration import migrar_banco_completo
 from auth.user import (
     cadastrar_usuario,
     verificar_credenciais,
-    buscar_usuario_por_email,
     confirmar_email,
 )
 from auth.password_reset import (
@@ -23,9 +25,12 @@ from auth.password_reset import (
     redefinir_senha_com_token,
 )
 
-# Importações das páginas
-from pages.cadastro_pet import app as cadastro_pet_app
-from pages.avaliacao import app as avaliacao_app
+# ===========================
+# Imports das páginas
+# ===========================
+from pages.cadastro_pet import render as cadastro_pet_app
+from pages.avaliacao import render as avaliacao_app
+# Adicione outros módulos de página aqui
 
 # 🔧 Inicializa banco
 migrar_banco_completo()
@@ -34,19 +39,19 @@ migrar_banco_completo()
 st.set_page_config(page_title="PETDOR – Avaliação de Dor", layout="centered")
 st.title("🐾 PETDOR – Sistema PETDOR")
 
-# -----------------------
+# ===========================
 # Lógica de URL parameters (confirm email / reset password)
-# -----------------------
+# ===========================
 query_params = st.query_params
 if "token" in query_params and "action" in query_params:
     token = query_params["token"]
-    action = query_params["action"]
+    action = query_params["action"][0] if isinstance(query_params["action"], list) else query_params["action"]
 
     if action == "confirm_email":
         st.subheader("Confirmação de E-mail")
         ok, msg = confirmar_email(token)
         st.success(msg) if ok else st.error(msg)
-        st.query_params.clear()
+        st.experimental_set_query_params()  # Limpa query params
         st.stop()
 
     elif action == "reset_password":
@@ -62,18 +67,18 @@ if "token" in query_params and "action" in query_params:
             else:
                 ok, msg = redefinir_senha_com_token(token, nova_senha)
                 st.success(msg) if ok else st.error(msg)
-                st.query_params.clear()
+                st.experimental_set_query_params()
                 st.stop()
         st.stop()
 
-# -----------------------
-# Menu lateral
-# -----------------------
+# ===========================
+# Menu lateral de login/conta
+# ===========================
 menu = st.sidebar.selectbox("Menu", ["Login", "Criar Conta", "Redefinir Senha"])
 
-# -----------------------
+# ---------------------------
 # LOGIN
-# -----------------------
+# ---------------------------
 if menu == "Login":
     st.subheader("Login")
     email = st.text_input("E-mail", key="login_email").lower()
@@ -82,19 +87,21 @@ if menu == "Login":
         ok, result = verificar_credenciais(email, senha)
         if ok:
             st.success("Login bem-sucedido!")
-            st.session_state.user_id = result['id']
-            st.session_state.user_email = result['email']
-            st.session_state.user_name = result['nome']
-            st.session_state.user_type = result['tipo_usuario']
-            st.session_state.logged_in = True
-            st.session_state.page = "Avaliação de Dor"
+            st.session_state.update({
+                "user_id": result["id"],
+                "user_email": result["email"],
+                "user_name": result["nome"],
+                "user_type": result["tipo_usuario"],
+                "logged_in": True,
+                "page": "Avaliação de Dor",
+            })
             st.rerun()
         else:
             st.error(result)
 
-# -----------------------
+# ---------------------------
 # CRIAR CONTA
-# -----------------------
+# ---------------------------
 elif menu == "Criar Conta":
     st.subheader("Criar Nova Conta")
     with st.form("cadastro_form"):
@@ -102,9 +109,8 @@ elif menu == "Criar Conta":
         email = st.text_input("E-mail", key="cadastro_email").lower()
         senha = st.text_input("Senha", type="password", key="cadastro_senha")
         confirmar_senha = st.text_input("Confirmar Senha", type="password", key="cadastro_confirmar_senha")
-        tipo_usuario = st.selectbox("Tipo de Usuário", ["Tutor", "Veterinário", "Clínica"], key="cadastro_tipo_usuario")
-        pais = st.text_input("País", value="Brasil", key="cadastro_pais").title()
-
+        tipo_usuario = st.selectbox("Tipo de Usuário", ["Tutor", "Veterinário", "Clínica"])
+        pais = st.text_input("País", value="Brasil").title()
         submitted = st.form_submit_button("Cadastrar")
         if submitted:
             if not nome or not email or not senha or not confirmar_senha:
@@ -117,9 +123,9 @@ elif menu == "Criar Conta":
                 if ok:
                     st.info("Confirme seu e-mail antes de fazer login.")
 
-# -----------------------
+# ---------------------------
 # REDEFINIR SENHA
-# -----------------------
+# ---------------------------
 elif menu == "Redefinir Senha":
     st.subheader("Redefinir Senha")
     email_reset = st.text_input("Seu e-mail", key="reset_email").lower()
@@ -145,17 +151,18 @@ elif menu == "Redefinir Senha":
             else:
                 st.error(msg_val)
 
-# -----------------------
+# ===========================
 # Páginas após login
-# -----------------------
+# ===========================
 if st.session_state.get("logged_in"):
     st.sidebar.markdown("---")
     app_pages = {
         "Avaliação de Dor": avaliacao_app,
         "Cadastro de Pet": cadastro_pet_app,
     }
+    # Adicione app de admin se necessário
     if st.session_state.user_type == "Admin":
-        app_pages["Administração"] = None  # Substitua pelo app de admin
+        app_pages["Administração"] = None
 
     selected_app_page = st.sidebar.selectbox(
         "Navegar",
@@ -163,14 +170,8 @@ if st.session_state.get("logged_in"):
         index=list(app_pages.keys()).index(st.session_state.page) if st.session_state.page in app_pages else 0
     )
 
-    if selected_app_page == "Avaliação de Dor":
-        avaliacao_app()
-    elif selected_app_page == "Cadastro de Pet":
-        cadastro_pet_app()
-    # elif selected_app_page == "Administração":
-    #     admin_app()
+    app_pages[selected_app_page]() if app_pages[selected_app_page] else st.info("Página em construção")
 
     if st.sidebar.button("Sair"):
         st.session_state.clear()
         st.rerun()
-
