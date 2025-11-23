@@ -3,6 +3,7 @@ import os
 import psycopg2
 from psycopg2.extras import RealDictCursor # Para retornar resultados como dicionários
 import logging
+import streamlit as st # Importar st para exibir mensagens de erro
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +24,8 @@ def conectar_db():
         return conn
     except psycopg2.Error as e:
         logger.error(f"Erro ao conectar ao Supabase: {e}", exc_info=True)
-        st.error(f"Erro ao conectar ao banco de dados. Por favor, tente novamente mais tarde. Detalhes: {e}")
+        st.error(f"Erro crítico ao conectar ao banco de dados. Por favor, verifique as variáveis de ambiente do Supabase e tente novamente. Detalhes: {e}")
         st.stop() # Interrompe a execução do Streamlit app em caso de falha crítica
-        # Ou, se preferir, pode levantar a exceção para ser tratada em um nível superior
-        # raise ConnectionError(f"Falha ao conectar ao banco de dados: {e}") from e
     except Exception as e:
         logger.error(f"Erro inesperado ao conectar ao Supabase: {e}", exc_info=True)
         st.error(f"Erro inesperado ao conectar ao banco de dados. Detalhes: {e}")
