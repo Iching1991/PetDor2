@@ -8,21 +8,24 @@ import logging
 logger = logging.getLogger(__name__)
 
 # =============================================================
-# Carregar variáveis de ambiente no padrão EMAIL_*
+# CARREGAMENTO DE VARIÁVEIS DE AMBIENTE
 # =============================================================
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 EMAIL_HOST = os.getenv("EMAIL_HOST")
 EMAIL_PORT = os.getenv("EMAIL_PORT")
 SENDER_EMAIL = os.getenv("SENDER_EMAIL", EMAIL_USER)
-APP_BASE_URL = os.getenv("APP_BASE_URL", "")
+
+# URL base do app (Ex: https://petdor.streamlit.app )
+APP_BASE_URL = os.getenv("APP_BASE_URL", "").rstrip("/")
+
 
 # =============================================================
-# Validação automática (antes de enviar)
+# VALIDAÇÃO DAS CONFIGURAÇÕES DE EMAIL
 # =============================================================
 def validar_config_email():
     if not EMAIL_USER or not EMAIL_PASSWORD:
-        logger.error("❌ EMAIL_USER ou EMAIL_PASSWORD não configurados no ambiente")
+        logger.error("❌ EMAIL_USER ou EMAIL_PASSWORD não configurados")
         return False
 
     if not EMAIL_HOST:
@@ -37,17 +40,18 @@ def validar_config_email():
 
 
 # =============================================================
-# Função genérica de envio
+# ENVIO GENÉRICO
 # =============================================================
 def enviar_email(destino, assunto, html):
     """
-    Envia um email genérico em HTML.
+    Envia email em HTML com SMTP autenticado.
     """
+
     if not validar_config_email():
         return False
 
     try:
-        msg = MIMEMultipart()
+        msg = MIMEMultipart("alternative")
         msg["From"] = SENDER_EMAIL
         msg["To"] = destino
         msg["Subject"] = assunto
@@ -65,12 +69,12 @@ def enviar_email(destino, assunto, html):
         return True
 
     except Exception as e:
-        logger.error(f"❌ Erro ao enviar email para {destino}: {e}", exc_info=True)
+        logger.error(f"❌ Falha ao enviar email para {destino}: {e}", exc_info=True)
         return False
 
 
 # =============================================================
-# 1) Email de CONFIRMAÇÃO DE CADASTRO
+# 1) CONFIRMAÇÃO DE EMAIL (JWT)
 # =============================================================
 def enviar_email_confirmacao(email_destino, nome, token):
     link = f"{APP_BASE_URL}/confirm_email?token={token}"
@@ -84,11 +88,11 @@ def enviar_email_confirmacao(email_destino, nome, token):
 
         <p>Obrigado por criar sua conta no <strong>PETDOR</strong>.</p>
 
-        <p>Para ativar sua conta, clique no link abaixo:</p>
+        <p>Clique abaixo para confirmar seu e-mail:</p>
 
         <p><a href="{link}">{link}</a></p>
 
-        <p>Se você não solicitou este cadastro, ignore este email.</p>
+        <p>Se você não fez este cadastro, apenas ignore.</p>
 
         <br/>
         <p>Atenciosamente,<br/>Equipe PETDOR 🐾</p>
@@ -100,7 +104,7 @@ def enviar_email_confirmacao(email_destino, nome, token):
 
 
 # =============================================================
-# 2) Email de RESET DE SENHA
+# 2) RESET DE SENHA (JWT)
 # =============================================================
 def enviar_email_reset_senha(email_destino, nome, token):
     link = f"{APP_BASE_URL}/reset_password?token={token}"
@@ -112,16 +116,15 @@ def enviar_email_reset_senha(email_destino, nome, token):
     <body>
         <p>Olá <strong>{nome}</strong>,</p>
 
-        <p>Parece que você solicitou a redefinição de senha do PETDOR.</p>
+        <p>Você solicitou a redefinição da sua senha no PETDOR.</p>
 
         <p>Clique no link abaixo para definir uma nova senha:</p>
 
         <p><a href="{link}">{link}</a></p>
 
-        <p>O link expira em <strong>1 hora</strong>.</p>
+        <p><b>O link expira em 1 hora.</b></p>
 
-        <br/>
-        <p>Se você não fez esta solicitação, apenas ignore.</p>
+        <p>Se não foi você, ignore esta mensagem.</p>
 
         <br/>
         <p>Equipe PETDOR 🐾</p>
@@ -133,7 +136,7 @@ def enviar_email_reset_senha(email_destino, nome, token):
 
 
 # =============================================================
-# 3) Email de BOAS-VINDAS
+# 3) EMAIL DE BOAS-VINDAS
 # =============================================================
 def enviar_email_boas_vindas(email_destino, nome):
     assunto = "Bem-vindo ao PETDOR! 🐾"
@@ -143,19 +146,19 @@ def enviar_email_boas_vindas(email_destino, nome):
     <body>
         <p>Olá <strong>{nome}</strong>! 😊</p>
 
-        <p>Seja bem-vindo ao <strong>PETDOR</strong>, o sistema mais moderno para avaliação e monitoramento da dor veterinária.</p>
+        <p>Seja bem-vindo ao <strong>PETDOR</strong>, o sistema mais moderno de avaliação e monitoramento da dor veterinária.</p>
 
         <p>Agora você tem acesso a:</p>
 
         <ul>
-            <li>✔ Avaliações profissionais completas</li>
+            <li>✔ Avaliações completas</li>
             <li>✔ Relatórios em PDF</li>
             <li>✔ Histórico do paciente</li>
             <li>✔ Escalas validadas internacionalmente</li>
         </ul>
 
         <br/>
-        <p>Estamos felizes em ter você conosco!</p>
+        <p>Estamos felizes em ter você com a gente!</p>
 
         <p>Equipe PETDOR 🐾</p>
     </body>
@@ -163,4 +166,3 @@ def enviar_email_boas_vindas(email_destino, nome):
     """
 
     return enviar_email(email_destino, assunto, html)
-
