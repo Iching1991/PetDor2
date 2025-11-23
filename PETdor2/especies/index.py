@@ -1,53 +1,90 @@
-# PETdor_2.0/especies/index.py
+# PETdor2/especies/index.py
 
 """
-Módulo de registro e carregamento de configurações de espécies.
-Define as dataclasses Pergunta e EspecieConfig e registra automaticamente
-as configurações de cada espécie.
+Sistema central de registro e consulta das espécies e suas configurações.
+Cada espécie deve fornecer um dicionário com a estrutura:
+
+{
+    "id": "cao",
+    "nome": "Cães",
+    "categorias": [
+        {
+            "nome": "Comportamento",
+            "perguntas": [
+                { "texto": "Está ativo?", "escala": "0-3" }
+            ]
+        }
+    ]
+}
 """
 
-from dataclasses import dataclass
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 
-@dataclass
-class Pergunta:
-    texto: str
-    invertida: bool = False
-    peso: float = 1.0
+# Onde todas as espécies são armazenadas
+_ESPECIES_REGISTRADAS: Dict[str, dict] = {}
 
-@dataclass
-class EspecieConfig:
-    nome: str
-    especie_id: str
-    descricao: str
-    opcoes_escala: List[str]
-    perguntas: List[Pergunta]
 
-# Dicionário para armazenar as configurações de todas as espécies
-_ESPECIES_REGISTRADAS: Dict[str, EspecieConfig] = {}
+# ==========================================================
+# Funções de registro e busca
+# ==========================================================
+def registrar_especie(config: dict):
+    """
+    Registra a configuração de uma espécie.
+    A configuração DEVE conter:
+        - id (str)
+        - nome (str)
+        - categorias (list)
+    """
+    especie_id = config.get("id")
 
-def registrar_especie(config: EspecieConfig):
-    """Registra uma configuração de espécie no sistema."""
-    if config.especie_id in _ESPECIES_REGISTRADAS:
-        raise ValueError(f"Espécie com ID '{config.especie_id}' já registrada.")
-    _ESPECIES_REGISTRADAS[config.especie_id] = config
+    if not especie_id:
+        raise ValueError("Configuração de espécie inválida: falta o campo 'id'.")
 
-def listar_especies() -> List[EspecieConfig]:
-    """Retorna uma lista de todas as configurações de espécies registradas."""
-    return list(_ESPECIES_REGISTRADAS.values())
+    if especie_id in _ESPECIES_REGISTRADAS:
+        raise ValueError(f"Espécie com ID '{especie_id}' já registrada.")
 
-def buscar_especie_por_id(especie_id: str) -> Optional[EspecieConfig]:
-    """Busca uma configuração de espécie pelo seu ID."""
+    _ESPECIES_REGISTRADAS[especie_id] = config
+
+
+def buscar_especie_por_id(especie_id: str) -> Optional[dict]:
+    """Retorna a configuração completa da espécie."""
     return _ESPECIES_REGISTRADAS.get(especie_id)
 
-def get_especies_nomes() -> List[str]: # <-- NOVA FUNÇÃO ADICIONADA AQUI!
-    """Retorna uma lista com os nomes de todas as espécies registradas."""
-    return [config.nome for config in _ESPECIES_REGISTRADAS.values()]
 
-# ----------------------------------------------------------------------
-# Importa e registra as configurações de cada espécie
-# ----------------------------------------------------------------------
-# Importa as configurações de cada arquivo de espécie
+def listar_especies() -> List[dict]:
+    """Lista todas as espécies registradas."""
+    return list(_ESPECIES_REGISTRADAS.values())
+
+
+def get_especies_nomes() -> List[str]:
+    """Retorna somente os nomes das espécies registradas."""
+    return [config["nome"] for config in _ESPECIES_REGISTRADAS.values()]
+
+
+def get_escala_labels(escala: str) -> List[str]:
+    """
+    Retorna os labels de uma escala.
+    Exemplo:
+        "0-3" → ["0", "1", "2", "3"]
+        "sim-nao" → ["Sim", "Não"]
+    """
+
+    escala = escala.lower().strip()
+
+    if escala == "sim-nao":
+        return ["Sim", "Não"]
+
+    if "-" in escala:
+        inicio, fim = escala.split("-")
+        return [str(i) for i in range(int(inicio), int(fim) + 1)]
+
+    raise ValueError(f"Escala desconhecida: {escala}")
+
+
+# ==========================================================
+# Importar e registrar automaticamente todas as espécies
+# ==========================================================
+
 from .cao import CONFIG_CAES
 from .gato import CONFIG_GATOS
 from .coelho import CONFIG_COELHO
@@ -55,7 +92,6 @@ from .porquinho import CONFIG_PORQUINHO
 from .aves import CONFIG_AVES
 from .repteis import CONFIG_REPTEIS
 
-# Registra as configurações importadas
 registrar_especie(CONFIG_CAES)
 registrar_especie(CONFIG_GATOS)
 registrar_especie(CONFIG_COELHO)
