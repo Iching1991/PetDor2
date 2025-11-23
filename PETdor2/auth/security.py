@@ -7,59 +7,62 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-SECRET_KEY = os.getenv("SECRET_KEY", "sua_chave_secreta_muito_segura") # Use uma chave forte em produção!
-ALGORITHM = "HS256"
+# Certifique-se de que SECRET_KEY está definida nas variáveis de ambiente
+SECRET_KEY = os.getenv("SECRET_KEY", "sua_chave_secreta_padrao_muito_segura_e_longa")
+if SECRET_KEY == "sua_chave_secreta_padrao_muito_segura_e_longa":
+    logger.warning("SECRET_KEY não definida nas variáveis de ambiente. Usando valor padrão. ISSO NÃO É SEGURO PARA PRODUÇÃO!")
 
-def hash_password(password: str) -> str:
+def hash_password(password):
     """Gera o hash de uma senha."""
     hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
     return hashed.decode('utf-8')
 
-def verify_password(password: str, hashed_password: str) -> bool:
+def verify_password(password, hashed_password):
     """Verifica se uma senha corresponde ao hash."""
     return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
 
-def generate_email_token(email: str, expires_delta_minutes: int = 60) -> str:
+def generate_email_token(email, expiration_hours=24):
     """Gera um token JWT para confirmação de e-mail."""
-    expire = datetime.utcnow() + timedelta(minutes=expires_delta_minutes)
-    to_encode = {"exp": expire, "sub": email, "type": "email_confirm"}
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+    payload = {
+        "email": email,
+        "exp": datetime.now() + timedelta(hours=expiration_hours),
+        "type": "email_confirmation"
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
-def verify_email_token(token: str) -> str | None:
-    """Verifica um token JWT de confirmação de e-mail e retorna o e-mail se válido."""
+def verify_email_token(token):
+    """Verifica e decodifica um token JWT de confirmação de e-mail."""
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        if payload.get("type") == "email_confirm":
-            return payload.get("sub")
-        return None
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        if payload.get("type") == "email_confirmation":
+            return True, payload["email"]
+        return False, None
     except jwt.ExpiredSignatureError:
         logger.warning("Token de confirmação de e-mail expirado.")
-        return None
+        return False, None
     except jwt.InvalidTokenError:
         logger.warning("Token de confirmação de e-mail inválido.")
-        return None
+        return False, None
 
-# Funções para reset de senha (padronizando nomes)
-def generate_reset_token(email: str, expires_delta_minutes: int = 30) -> str:
-    """Gera um token JWT para reset de senha."""
-    expire = datetime.utcnow() + timedelta(minutes=expires_delta_minutes)
-    to_encode = {"exp": expire, "sub": email, "type": "password_reset"}
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
+def generate_reset_token(email, expiration_hours=1):
+    """Gera um token JWT para redefinição de senha."""
+    payload = {
+        "email": email,
+        "exp": datetime.now() + timedelta(hours=expiration_hours),
+        "type": "password_reset"
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
-def verify_reset_token(token: str) -> str | None:
-    """Verifica um token JWT de reset de senha e retorna o e-mail se válido."""
+def verify_reset_token(token):
+    """Verifica e decodifica um token JWT de redefinição de senha."""
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
         if payload.get("type") == "password_reset":
-            return payload.get("sub")
-        return None
+            return True, payload["email"]
+        return False, None
     except jwt.ExpiredSignatureError:
-        logger.warning("Token de reset de senha expirado.")
-        return None
+        logger.warning("Token de redefinição de senha expirado.")
+        return False, None
     except jwt.InvalidTokenError:
-        logger.warning("Token de reset de senha inválido.")
-        return None
-
-
+        logger.warning("Token de redefinição de senha inválido.")
+        return False, None
