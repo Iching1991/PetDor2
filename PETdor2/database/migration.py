@@ -1,22 +1,23 @@
 # PETdor2/database/migration.py
-import os
-from .connection import conectar_db
 import logging
-import streamlit as st # Para exibir mensagens de erro no Streamlit
+import os
+import streamlit as st # Para exibir mensagens de erro
+from database.connection import conectar_db
 
 logger = logging.getLogger(__name__)
 
 def migrar_banco_completo():
     """
-    Executa todas as migrações necessárias para o banco de dados PostgreSQL (Supabase).
-    Cria tabelas e colunas se não existirem.
+    Cria e migra todas as tabelas necessárias para o banco de dados PostgreSQL (Supabase).
+    Inclui a criação da tabela de usuários, tokens de e-mail, tokens de reset de senha,
+    e a migração de colunas 'ativo' e 'email_confirmado' se necessário.
     """
     conn = None
     try:
         conn = conectar_db()
         cur = conn.cursor()
 
-        # --- Tabela 'usuarios' ---
+        # 1. Tabela de Usuários
         cur.execute("""
             CREATE TABLE IF NOT EXISTS usuarios (
                 id SERIAL PRIMARY KEY,
@@ -35,28 +36,27 @@ def migrar_banco_completo():
         """)
         logger.info("Tabela 'usuarios' verificada/criada.")
 
-        # --- Tabela 'pets' ---
+        # 2. Tabela de Pets (exemplo, ajuste conforme seu modelo de dados)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS pets (
                 id SERIAL PRIMARY KEY,
                 nome TEXT NOT NULL,
                 especie TEXT NOT NULL,
                 raca TEXT,
-                idade INTEGER,
+                data_nascimento DATE,
+                sexo TEXT,
                 peso DECIMAL(5,2),
-                genero TEXT,
                 usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
                 data_cadastro TIMESTAMPTZ NOT NULL DEFAULT NOW()
             );
         """)
         logger.info("Tabela 'pets' verificada/criada.")
 
-        # --- Tabela 'avaliacoes' ---
+        # 3. Tabela de Avaliações (exemplo, ajuste conforme seu modelo de dados)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS avaliacoes (
                 id SERIAL PRIMARY KEY,
                 pet_id INTEGER REFERENCES pets(id) ON DELETE CASCADE,
-                usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
                 data_avaliacao TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 pontuacao_total INTEGER NOT NULL,
                 observacoes TEXT
@@ -64,50 +64,70 @@ def migrar_banco_completo():
         """)
         logger.info("Tabela 'avaliacoes' verificada/criada.")
 
-        # --- Tabela 'respostas_avaliacao' ---
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS respostas_avaliacao (
-                id SERIAL PRIMARY KEY,
-                avaliacao_id INTEGER REFERENCES avaliacoes(id) ON DELETE CASCADE,
-                pergunta_id INTEGER NOT NULL, -- ID da pergunta (ex: 1, 2, 3...)
-                resposta INTEGER NOT NULL,    -- Pontuação da resposta (ex: 0-7)
-                data_resposta TIMESTAMPTZ NOT NULL DEFAULT NOW()
-            );
-        """)
-        logger.info("Tabela 'respostas_avaliacao' verificada/criada.")
+        # --- Migrações de Colunas (se necessário) ---
+        # Exemplo: Adicionar coluna 'ativo' se não existir
+        try:
+            cur.execute("ALTER TABLE usuarios ADD COLUMN ativo BOOLEAN NOT NULL DEFAULT TRUE;")
+            conn.commit()
+            logger.info("Coluna 'ativo' adicionada à tabela 'usuarios'.")
+        except psycopg2.errors.DuplicateColumn:
+            conn.rollback() # Rollback da transação se a coluna já existe
+            logger.info("Coluna 'ativo' já existe na tabela 'usuarios'.")
+        except Exception as e:
+            conn.rollback()
+            logger.warning(f"Erro ao adicionar coluna 'ativo': {e}")
 
-        # --- Tabela 'especies' (para gerenciar configurações de espécies) ---
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS especies (
-                id SERIAL PRIMARY KEY,
-                nome TEXT NOT NULL UNIQUE,
-                config_json JSONB NOT NULL -- Armazena a configuração da espécie em formato JSON
-            );
-        """)
-        logger.info("Tabela 'especies' verificada/criada.")
+        # Exemplo: Adicionar coluna 'email_confirmado' se não existir
+        try:
+            cur.execute("ALTER TABLE usuarios ADD COLUMN email_confirmado BOOLEAN NOT NULL DEFAULT FALSE;")
+            conn.commit()
+            logger.info("Coluna 'email_confirmado' adicionada à tabela 'usuarios'.")
+        except psycopg2.errors.DuplicateColumn:
+            conn.rollback()
+            logger.info("Coluna 'email_confirmado' já existe na tabela 'usuarios'.")
+        except Exception as e:
+            conn.rollback()
+            logger.warning(f"Erro ao adicionar coluna 'email_confirmado': {e}")
 
-        # --- Migração de colunas (se necessário) ---
-        # Exemplo: Adicionar uma coluna 'telefone' à tabela 'usuarios' se ela não existir
-        # cur.execute("""
-        #     DO $$
-        #     BEGIN
-        #         IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='usuarios' AND column_name='telefone') THEN
-        #             ALTER TABLE usuarios ADD COLUMN telefone TEXT;
-        #         END IF;
-        #     END
-        #     $$;
-        # """)
-        # logger.info("Coluna 'telefone' na tabela 'usuarios' verificada/adicionada.")
+        # Exemplo: Adicionar coluna 'reset_password_token' se não existir
+        try:
+            cur.execute("ALTER TABLE usuarios ADD COLUMN reset_password_token TEXT UNIQUE;")
+            conn.commit()
+            logger.info("Coluna 'reset_password_token' adicionada à tabela 'usuarios'.")
+        except psycopg2.errors.DuplicateColumn:
+            conn.rollback()
+            logger.info("Coluna 'reset_password_token' já existe na tabela 'usuarios'.")
+        except Exception as e:
+            conn.rollback()
+            logger.warning(f"Erro ao adicionar coluna 'reset_password_token': {e}")
+
+        # Exemplo: Adicionar coluna 'reset_password_expires' se não existir
+        try:
+            cur.execute("ALTER TABLE usuarios ADD COLUMN reset_password_expires TIMESTAMPTZ;")
+            conn.commit()
+            logger.info("Coluna 'reset_password_expires' adicionada à tabela 'usuarios'.")
+        except psycopg2.errors.DuplicateColumn:
+            conn.rollback()
+            logger.info("Coluna 'reset_password_expires' já existe na tabela 'usuarios'.")
+        except Exception as e:
+            conn.rollback()
+            logger.warning(f"Erro ao adicionar coluna 'reset_password_expires': {e}")
 
         conn.commit()
-        logger.info("Migração do banco de dados PostgreSQL concluída com sucesso.")
+        logger.info("Migração do banco de dados concluída com sucesso.")
 
+    except psycopg2.Error as e:
+        if conn:
+            conn.rollback()
+        logger.error(f"Erro de banco de dados durante a migração: {e}", exc_info=True)
+        st.error(f"Erro crítico ao inicializar o banco de dados. Por favor, contate o suporte. Detalhes: {e}")
+        st.stop()
     except Exception as e:
         if conn:
             conn.rollback()
-        logger.error(f"Erro durante a migração do banco de dados PostgreSQL: {e}", exc_info=True)
-        st.error(f"Erro crítico ao inicializar o banco de dados. Por favor, contate o suporte. Detalhes: {e}")
-        st.stop() # Interrompe a execução do Streamlit app
+        logger.error(f"Erro inesperado durante a migração do banco de dados: {e}", exc_info=True)
+        st.error(f"Erro inesperado ao inicializar o banco de dados. Detalhes: {e}")
+        st.stop()
     finally:
         if conn:
             conn.close()
