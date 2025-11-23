@@ -1,257 +1,191 @@
-# PETdor_2_0/auth/user.py
+# PETdor2/auth/user.py
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime
 
-from database.connection import conectar_db
-from auth.security import hash_password, verify_password
-from utils.email_sender import enviar_email_confirmacao
-from utils.tokens import gerar_token_simples, validar_token_simples
+from PETdor2.database.connection import conectar_db
+from PETdor2.auth.security import hash_password, verify_password, generate_email_token
+from PETdor2.utils.email_sender import enviar_email_confirmacao
 
 logger = logging.getLogger(__name__)
+USING_POSTGRES = bool(os.getenv("DB_HOST"))
 
 
-# =====================================================
-# AJUSTE AUTOMÁTICO DE PLACEHOLDER (SQLite ou PostgreSQL)
-# =====================================================
 def placeholder():
-    """Retorna o placeholder correto dependendo do banco."""
-    return "%s" if os.getenv("DB_HOST") else "?"
+    return "%s" if USING_POSTGRES else "?"
 
 
-# =====================================================
-# CRIAR TABELA SE NÃO EXISTIR
-# =====================================================
 def criar_tabelas_se_nao_existir():
     conn = conectar_db()
     cur = conn.cursor()
-
-    if os.getenv("DB_HOST"):  # PostgreSQL
+    if USING_POSTGRES:
         cur.execute("""
             CREATE TABLE IF NOT EXISTS usuarios (
-                id SERIAL PRIMARY KEY,
+                id BIGSERIAL PRIMARY KEY,
                 nome TEXT NOT NULL,
-                email TEXT NOT NULL UNIQUE,
+                email TEXT UNIQUE NOT NULL,
                 senha_hash TEXT NOT NULL,
                 tipo_usuario TEXT NOT NULL DEFAULT 'Tutor',
-                pais TEXT NOT NULL DEFAULT 'Brasil',
+                pais TEXT DEFAULT 'Brasil',
                 email_confirm_token TEXT UNIQUE,
                 email_confirmado BOOLEAN NOT NULL DEFAULT FALSE,
-                ativo BOOLEAN NOT NULL DEFAULT TRUE,
-                data_cadastro TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 reset_password_token TEXT,
-                reset_password_expires TIMESTAMPTZ
+                reset_password_expires TIMESTAMPTZ,
+                ativo BOOLEAN NOT NULL DEFAULT TRUE,
+                criado_em TIMESTAMPTZ NOT NULL DEFAULT NOW()
             );
         """)
-    else:  # SQLite
+    else:
         cur.execute("""
             CREATE TABLE IF NOT EXISTS usuarios (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 nome TEXT NOT NULL,
-                email TEXT NOT NULL UNIQUE,
+                email TEXT UNIQUE NOT NULL,
                 senha_hash TEXT NOT NULL,
                 tipo_usuario TEXT NOT NULL DEFAULT 'Tutor',
-                pais TEXT NOT NULL DEFAULT 'Brasil',
+                pais TEXT DEFAULT 'Brasil',
                 email_confirm_token TEXT,
-                email_confirmado INTEGER NOT NULL DEFAULT 0,
-                ativo INTEGER NOT NULL DEFAULT 1,
-                data_cadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                email_confirmado INTEGER DEFAULT 0,
                 reset_password_token TEXT,
-                reset_password_expires TIMESTAMP
+                reset_password_expires TIMESTAMP,
+                ativo INTEGER DEFAULT 1,
+                criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
-
     conn.commit()
     conn.close()
 
 
-# =====================================================
-# CADASTRAR USUÁRIO
-# =====================================================
-def cadastrar_usuario(nome, email, senha, tipo_usuario, pais):
+def cadastrar_usuario(nome, email, senha, tipo_usuario="Tutor", pais="Brasil") -> tuple[bool, str]:
     conn = None
     try:
         conn = conectar_db()
         cur = conn.cursor()
 
         senha_hash = hash_password(senha)
-        token = gerar_token_simples(email)
+        token = generate_email_token(email)  # JWT token for confirmation
 
         sql = f"""
-            INSERT INTO usuarios
-            (nome, email, senha_hash, tipo_usuario, pais, email_confirm_token, email_confirmado)
-            VALUES ({placeholder()}, {placeholder()}, {placeholder()},
-                    {placeholder()}, {placeholder()}, {placeholder()}, {placeholder()})
+            INSERT INTO usuarios (nome, email, senha_hash, tipo_usuario, pais, email_confirm_token, email_confirmado)
+            VALUES ({placeholder()}, {placeholder()}, {placeholder()}, {placeholder()}, {placeholder()}, {placeholder()}, {placeholder()})
         """
-
-        cur.execute(sql, (nome, email, senha_hash, tipo_usuario, pais, token, 0))
+        cur.execute(sql, (nome, email.lower(), senha_hash, tipo_usuario, pais, token, 0))
         conn.commit()
 
-        logger.info(f"Usuário {email} cadastrado.")
+        enviado = enviar_email_confirmacao(email, nome, token)
+        if not enviado:
+            logger.error("Falha ao enviar e-mail de confirmação.")
+            return True, "Cadastro feito, mas falha ao enviar e-mail de confirmação."
 
-        # Enviar confirmação
-        if not enviar_email_confirmacao(email, nome, token):
-            logger.error(f"Falha ao enviar e-mail de confirmação para {email}")
-            return True, "Cadastro realizado, mas houve erro ao enviar o e-mail. Tente novamente depois."
-
-        return True, "Cadastro realizado! Verifique seu e-mail para confirmar sua conta."
-
+        return True, "Cadastro realizado com sucesso! Verifique o seu e-mail para confirmar a conta."
     except Exception as e:
+        logger.error("Erro em cadastrar_usuario", exc_info=True)
         if conn:
             conn.rollback()
-        if "UNIQUE constraint" in str(e) or "duplicate key" in str(e):
+        msg = str(e)
+        if "UNIQUE" in msg or "duplicate" in msg:
             return False, "Este e-mail já está cadastrado."
-        logger.error(f"Erro ao cadastrar usuário: {e}", exc_info=True)
-        return False, f"Erro ao cadastrar: {e}"
-
+        return False, "Erro interno ao cadastrar usuário."
     finally:
         if conn:
             conn.close()
 
 
-# =====================================================
-# VERIFICAR LOGIN
-# =====================================================
-def verificar_credenciais(email, senha):
+def verificar_credenciais(email, senha) -> tuple[bool, str | dict]:
     conn = None
     try:
         conn = conectar_db()
         cur = conn.cursor()
-
         sql = f"SELECT * FROM usuarios WHERE email = {placeholder()}"
-        cur.execute(sql, (email,))
+        cur.execute(sql, (email.lower(),))
         usuario = cur.fetchone()
-
         if not usuario:
             return False, "E-mail ou senha incorretos."
 
-        if not usuario["email_confirmado"]:
-            return False, "Confirme seu e-mail antes de entrar."
+        email_confirmado = usuario["email_confirmado"] if isinstance(usuario, dict) or hasattr(usuario, "keys") else usuario[ "email_confirmado" ] if isinstance(usuario, (list,tuple)) and len(usuario)>0 else usuario.get("email_confirmado", 0) if hasattr(usuario, "get") else usuario[0]
+        # Simplify access: handle sqlite Row (dict-like) and tuple
+        senha_hash = usuario["senha_hash"] if isinstance(usuario, dict) or hasattr(usuario, "keys") else usuario[3]
 
-        if not usuario["ativo"]:
-            return False, "Conta desativada."
+        if (email_confirmado in (0, False, "0", None)):
+            return False, "Por favor confirme seu e-mail antes de entrar."
 
-        if verify_password(senha, usuario["senha_hash"]):
-            return True, usuario
+        if not verify_password(senha, senha_hash):
+            return False, "E-mail ou senha incorretos."
 
-        return False, "E-mail ou senha incorretos."
-
+        return True, usuario
     except Exception as e:
-        logger.error(f"Erro no login: {e}", exc_info=True)
-        return False, "Erro interno no servidor."
-
+        logger.error("Erro em verificar_credenciais", exc_info=True)
+        return False, "Erro interno ao verificar credenciais."
     finally:
         if conn:
             conn.close()
 
 
-# =====================================================
-# BUSCAR USUÁRIO POR E-MAIL
-# =====================================================
 def buscar_usuario_por_email(email):
+    conn = conectar_db()
+    cur = conn.cursor()
+    sql = f"SELECT * FROM usuarios WHERE email = {placeholder()}"
+    cur.execute(sql, (email.lower(),))
+    return cur.fetchone()
+
+
+def confirmar_email(token: str) -> tuple[bool, str]:
+    """
+    Confirma e-mail usando token JWT (verificado por email_confirmation module).
+    This simply delegates to email_confirmation.confirmar_email in practice.
+    """
+    from PETdor2.auth.email_confirmation import confirmar_email as confirmar_email_fn
+    return confirmar_email_fn(token)
+
+
+def redefinir_senha(email: str, nova_senha: str) -> tuple[bool, str]:
     conn = None
     try:
         conn = conectar_db()
         cur = conn.cursor()
-
-        sql = f"SELECT * FROM usuarios WHERE email = {placeholder()}"
-        cur.execute(sql, (email,))
-        return cur.fetchone()
-
+        senha_hash = hash_password(nova_senha)
+        sql = f"UPDATE usuarios SET senha_hash = {placeholder()} WHERE email = {placeholder()}"
+        cur.execute(sql, (senha_hash, email.lower()))
+        conn.commit()
+        return True, "Senha redefinida com sucesso."
     except Exception as e:
-        logger.error(f"Erro ao buscar usuário: {e}")
-        return None
-
+        logger.error("Erro em redefinir_senha", exc_info=True)
+        if conn:
+            conn.rollback()
+        return False, "Erro interno ao redefinir senha."
     finally:
         if conn:
             conn.close()
 
 
-# =====================================================
-# CONFIRMAR E-MAIL
-# =====================================================
-def confirmar_email(token):
-    email = validar_token_simples(token)
-    if not email:
-        return False, "Token inválido ou expirado."
-
-    conn = conectar_db()
-    cur = conn.cursor()
-
-    sql = f"""
-        UPDATE usuarios
-        SET email_confirmado = 1,
-            email_confirm_token = NULL
-        WHERE email = {placeholder()}
-    """
-
-    cur.execute(sql, (email,))
-    conn.commit()
-    conn.close()
-
-    return True, "E-mail confirmado com sucesso!"
-
-
-# =====================================================
-# REDEFINIR SENHA (USADO PELO RESET)
-# =====================================================
-def redefinir_senha(email, nova_senha):
-    conn = conectar_db()
-    cur = conn.cursor()
-
-    senha_hash = hash_password(nova_senha)
-
-    sql = f"UPDATE usuarios SET senha_hash = {placeholder()} WHERE email = {placeholder()}"
-    cur.execute(sql, (senha_hash, email))
-
-    conn.commit()
-    conn.close()
-    return True, "Senha alterada com sucesso."
-
-
-# =====================================================
-# LISTAR TODOS (ADMIN)
-# =====================================================
 def buscar_todos_usuarios():
     conn = conectar_db()
     cur = conn.cursor()
-
     cur.execute("""
-        SELECT id, nome, email, tipo_usuario, pais, email_confirmado, ativo, data_cadastro
+        SELECT id, nome, email, tipo_usuario, pais, email_confirmado, ativo, criado_em
         FROM usuarios
-        ORDER BY data_cadastro DESC
+        ORDER BY criado_em DESC
     """)
-
     data = cur.fetchall()
     conn.close()
     return data
 
 
-# =====================================================
-# ATUALIZAR STATUS
-# =====================================================
 def atualizar_status_usuario(user_id, ativo):
     conn = conectar_db()
     cur = conn.cursor()
-
     sql = f"UPDATE usuarios SET ativo = {placeholder()} WHERE id = {placeholder()}"
     cur.execute(sql, (1 if ativo else 0, user_id))
-
     conn.commit()
     conn.close()
     return True, "Status atualizado."
 
 
-# =====================================================
-# ATUALIZAR TIPO
-# =====================================================
 def atualizar_tipo_usuario(user_id, tipo_usuario):
     conn = conectar_db()
     cur = conn.cursor()
-
     sql = f"UPDATE usuarios SET tipo_usuario = {placeholder()} WHERE id = {placeholder()}"
     cur.execute(sql, (tipo_usuario, user_id))
-
     conn.commit()
     conn.close()
     return True, "Tipo atualizado."
