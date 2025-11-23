@@ -1,28 +1,13 @@
-"""
-Pacote de acesso ao banco de dados da aplicação PETdor2.
+# PETdor2/database/__init__.py
+import logging
+import os
+# Removendo sqlite3 e Row, pois vamos usar psycopg2 para Supabase
+# import sqlite3
+# from sqlite3 import Row
 
-Este módulo inicializa o pacote 'database', permitindo acesso claro e
-organizado aos submódulos:
+# CORREÇÃO: Importação relativa para connection
+from . import connection 
 
-- database.connection
-- database.migration
-- database.models
+logger = logging.getLogger(__name__)
 
-O pacote evita ciclos de importação: apenas módulos seguros são expostos.
-"""
-
-# Importação explícita e organizada dos submódulos
-from PETdor2.database import connection
-from PETdor2.database import migration
-from PETdor2.database import models
-
-# Exportações públicas do pacote
-__all__ = [
-    "connection",
-    "migration",
-    "models",
-    "conectar_db",
-]
-
-# Exporta diretamente a função principal de conexão
-from PETdor2.database.connection import conectar_db
+# ... (restante do seu código __init__.py, se houver)
