@@ -6,6 +6,7 @@ import streamlit as st
 from datetime import datetime
 import json
 
+
 # ============================================
 # Correção de caminho para Streamlit Cloud
 # ============================================
@@ -14,16 +15,18 @@ root_dir = os.path.abspath(os.path.join(current_dir, ".."))  # raiz: PETdor2/
 if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 
+
 # ============================================
-# Importações locais (agora funcionam no Cloud)
+# Importações locais ajustadas (uso do ..)
 # ============================================
-from database.connection import conectar_db
-from database.models import Pet
-from especies.index import (
+from ..database.connection import conectar_db
+from ..database.models import Pet
+from ..especies.index import (
     get_especies_nomes,
     buscar_especie_por_id,
     get_escala_labels
 )
+
 
 # ==========================================================
 # Funções de acesso ao banco
