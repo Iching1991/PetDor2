@@ -1,100 +1,123 @@
-"""
-📝 Página de Avaliação de Dor - PETdor
-Integra sistema modular de espécies (especies/)
-"""
+# PETdor2/pages/avaliacao.py
 
 import streamlit as st
-import pandas as pd
-import json
 from datetime import datetime
+import json
 
-# Importa sistema modular de espécies
-from PETdor2.especies import (
+# ==========================================================
+# IMPORTS DE OUTROS MÓDULOS DO PROJETO
+# ==========================================================
+from database.supabase_client import supabase
+from especies.index import (
     get_especies_nomes,
-    get_especie_config,
-    get_escala_labels,
+    buscar_especie_por_id,
+    get_escala_labels
 )
 
-# Substitua qualquer import relativo
-# de:
-# from ..database.supabase_client import supabase
-# para:
-from PETdor2.database.supabase_client import supabase
-from PETdor2.especies.index import get_especies_nomes, buscar_especie_por_id, get_escala_labels
-
-
-
-# =====================================================================
-# 📌 Função para salvar avaliação no Supabase
-# =====================================================================
-def salvar_avaliacao(usuario_id, pet_id, especie, data, pontuacao, detalhes):
-    try:
-        payload = {
-            "usuario_id": usuario_id,
-            "pet_id": pet_id,
-            "especie": especie,
-            "data": data,
-            "pontuacao": pontuacao,
-            "detalhes": json.dumps(detalhes)
-        }
-
-        resposta = supabase.table("avaliacoes").insert(payload).execute()
-
-        if hasattr(resposta, "error") and resposta.error:
-            st.error(f"Erro ao salvar avaliação: {resposta.error.message}")
-            return False
-
-        return True
-
-    except Exception as e:
-        st.error(f"Falha ao comunicar com o banco: {e}")
-        return False
-
-
-# =====================================================================
-# 📌 UI PRINCIPAL
-# =====================================================================
-def render():
-    st.title("📊 Avaliação de Dor")
-
-    st.write("Preencha as informações abaixo:")
-
-    # Usuario
-    usuario_id = st.session_state.get("usuario_id", None)
-    if usuario_id is None:
-        st.error("⚠ Você precisa estar logado para acessar esta página.")
-        return
-
-    # Selecionar espécie
-    especies = get_especies_nomes()
-    especie = st.selectbox("Selecione a espécie:", especies)
-
-    # Selecionar PET
-    pet_id = st.text_input("ID do seu PET:")
-
-    # Data
-    data_hoje = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    # Carrega config da espécie
-    especie_config = get_especie_config(especie)
-    labels_escala = get_escala_labels(especie)
-
-    st.subheader("Escala de dor")
-
-    pontuacao = st.slider(
-        "Nível de dor:",
-        min_value=0,
-        max_value=len(labels_escala) - 1,
-        format="%d"
+# ==========================================================
+# FUNÇÕES DE ACESSO AO BANCO DE DADOS
+# ==========================================================
+def carregar_pets_do_usuario(usuario_id: int) -> list[dict]:
+    """Retorna todos os pets cadastrados pelo usuário via Supabase."""
+    response = (
+        supabase
+        .from_("pets")
+        .select("id, nome, especie")
+        .eq("tutor_id", usuario_id)
+        .order("nome", desc=False)
+        .execute()
     )
 
-    st.write(f"**Descrição:** {labels_escala[pontuacao]}")
+    # Compatibilidade com diferentes versões do supabase-py
+    pets = getattr(response, "data", None) or (response.get("data") if isinstance(response, dict) else None)
+    return pets or []
 
-    # Perguntas específicas da espécie
-    st.subheader("Avaliação comportamental:")
 
+def salvar_avaliacao(pet_id: int, usuario_id: int, especie: str, respostas_json: str, pontuacao_total: int):
+    """Salva a avaliação na tabela `avaliacoes` usando Supabase."""
+    payload = {
+        "pet_id": pet_id,
+        "usuario_id": usuario_id,
+        "especie": especie,
+        "respostas_json": respostas_json,
+        "pontuacao_total": pontuacao_total,
+        "criado_em": datetime.utcnow().isoformat()  # UTC
+    }
+
+    res = supabase.table("avaliacoes").insert(payload).execute()
+    if getattr(res, "error", None):
+        raise RuntimeError(f"Erro ao salvar avaliação: {res.error}")
+
+# ==========================================================
+# FUNÇÃO PRINCIPAL DA PÁGINA
+# ==========================================================
+def render():
+    usuario = st.session_state.get("usuario")
+    st.title("📋 Avaliação de Dor")
+
+    if not usuario:
+        st.warning("Faça login para acessar esta página.")
+        return
+
+    usuario_id = usuario["id"]
+
+    # ----------------------------
+    # Seleção do PET
+    # ----------------------------
+    st.subheader("🐾 Selecione o Pet")
+    pets = carregar_pets_do_usuario(usuario_id)
+
+    if not pets:
+        st.info("Você ainda não cadastrou nenhum pet.")
+        return
+
+    opcoes_pet = {f"{p.get('nome')} ({p.get('especie')})": p.get("id") for p in pets}
+    escolha_pet = st.selectbox("Escolha o pet:", list(opcoes_pet.keys()))
+    pet_id = opcoes_pet[escolha_pet]
+
+    especie = next((p.get("especie") for p in pets if p.get("id") == pet_id), None)
+    if not especie:
+        st.error("⚠ Não foi possível identificar a espécie do pet.")
+        return
+
+    especie_cfg = buscar_especie_por_id(especie)
+    if not especie_cfg:
+        st.error(f"⚠ A espécie '{especie}' não possui escala configurada.")
+        return
+
+    st.subheader(f"🐶 Avaliação para espécie: **{especie_cfg['nome']}**")
+    categorias = especie_cfg.get("categorias", [])
     respostas = {}
-    for pergunta in especie_config["perguntas"]:
-        respostas[pergunta] = st.selectbox(
-            p
+    pontuacao_total = 0
 
+    # ----------------------------
+    # Loop das categorias e perguntas
+    # ----------------------------
+    for categoria in categorias:
+        st.markdown(f"### 🔹 {categoria['nome']}")
+        for pergunta in categoria.get("perguntas", []):
+            texto = pergunta["texto"]
+            labels = get_escala_labels(pergunta["escala"])
+
+            escolha = st.radio(texto, labels, key=f"{categoria['nome']}_{texto}")
+            respostas[texto] = escolha
+
+            try:
+                pontuacao_total += labels.index(escolha)
+            except ValueError:
+                pontuacao_total += 0
+
+        st.divider()
+
+    st.markdown(f"## 🧮 Pontuação Total: **{pontuacao_total}**")
+
+    # ----------------------------
+    # Botão para salvar a avaliação
+    # ----------------------------
+    if st.button("Salvar Avaliação"):
+        respostas_json = json.dumps(respostas, ensure_ascii=False)
+        try:
+            salvar_avaliacao(pet_id, usuario_id, especie, respostas_json, pontuacao_total)
+            st.success("Avaliação salva com sucesso! ✅")
+        except Exception as e:
+            st.error(f"Erro ao salvar avaliação: {e}")
