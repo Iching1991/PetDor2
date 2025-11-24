@@ -1,90 +1,182 @@
 # PETdor2/pages/historico.py
-
+"""
+Página de histórico de avaliações do pet.
+Exibe todas as avaliações realizadas pelo usuário logado.
+"""
 import streamlit as st
-from PETdor2.database.connection import conectar_db
-import os
+import pandas as pd
+from datetime import datetime
+import logging
+from database.supabase_client import get_supabase
 
-USING_POSTGRES = bool(os.getenv("DB_HOST"))
-PH = "%s" if USING_POSTGRES else "?"
+logger = logging.getLogger(__name__)
 
+def buscar_avaliacoes_usuario(usuario_id: int) -> list:
+    """Busca todas as avaliações de um usuário."""
+    try:
+        supabase = get_supabase()
 
-def buscar_avaliacoes_usuario(usuario_id):
-    conn = conectar_db()
-    cur = conn.cursor()
+        response = (
+            supabase
+            .from_("avaliacoes")
+            .select("id, data_avaliacao, percentual_dor, observacoes, pet_id")
+            .eq("usuario_id", usuario_id)
+            .order("data_avaliacao", desc=True)
+            .execute()
+        )
 
-    sql = f"""
-        SELECT a.id,
-               a.data_avaliacao,
-               a.percentual_dor,
-               a.observacoes,
-               p.nome AS pet_nome,
-               p.especie AS pet_especie
-        FROM avaliacoes a
-        JOIN pets p ON a.pet_id = p.id
-        WHERE a.usuario_id = {PH}
-        ORDER BY a.data_avaliacao DESC
-    """
+        avaliacoes = response.data if response.data else []
 
-    cur.execute(sql, (usuario_id,))
-    rows = cur.fetchall()
+        # Busca informações dos pets
+        for aval in avaliacoes:
+            try:
+                pet_response = (
+                    supabase
+                    .from_("pets")
+                    .select("nome, especie")
+                    .eq("id", aval["pet_id"])
+                    .single()
+                    .execute()
+                )
+                aval["pet_nome"] = pet_response.data.get("nome", "Desconhecido")
+                aval["pet_especie"] = pet_response.data.get("especie", "Desconhecida")
+            except Exception as e:
+                logger.warning(f"Erro ao buscar pet {aval['pet_id']}: {e}")
+                aval["pet_nome"] = "Desconhecido"
+                aval["pet_especie"] = "Desconhecida"
 
-    conn.close()
-    return rows
+        return avaliacoes
 
+    except Exception as e:
+        logger.error(f"Erro ao buscar avaliações: {e}")
+        return []
 
-def deletar_avaliacao(avaliacao_id):
-    conn = conectar_db()
-    cur = conn.cursor()
+def deletar_avaliacao(avaliacao_id: int) -> tuple[bool, str]:
+    """Deleta uma avaliação do banco de dados."""
+    try:
+        supabase = get_supabase()
 
-    sql = f"DELETE FROM avaliacoes WHERE id = {PH}"
-    cur.execute(sql, (avaliacao_id,))
+        response = (
+            supabase
+            .from_("avaliacoes")
+            .delete()
+            .eq("id", avaliacao_id)
+            .execute()
+        )
 
-    conn.commit()
-    conn.close()
+        logger.info(f"✅ Avaliação {avaliacao_id} deletada com sucesso")
+        return True, "✅ Avaliação deletada com sucesso!"
 
+    except Exception as e:
+        logger.error(f"Erro ao deletar avaliação: {e}")
+        return False, f"❌ Erro ao deletar avaliação: {e}"
 
 def render():
+    """Renderiza a página de histórico de avaliações."""
     st.header("📊 Histórico de Avaliações")
 
+    # Verifica se usuário está logado
     usuario = st.session_state.get("usuario")
     if not usuario:
-        st.warning("Faça login para acessar seu histórico.")
+        st.warning("⚠️ Faça login para acessar seu histórico.")
         st.session_state.pagina = "login"
         st.stop()
 
-    usuario_id = usuario["id"]
+    usuario_id = usuario.get("id")
 
-    # Buscar avaliações
+    # Busca avaliações
     avaliacoes = buscar_avaliacoes_usuario(usuario_id)
 
     if not avaliacoes:
-        st.info("Você ainda não registrou avaliações.")
+        st.info("📭 Você ainda não registrou avaliações.")
         return
 
-    # Detectar formato de row
-    def get(row, k, idx):
-        return row[k] if hasattr(row, "keys") else row[idx]
+    st.success(f"✅ {len(avaliacoes)} avaliação(ões) encontrada(s)")
+    st.divider()
 
-    # Renderizar todas as avaliações
-    for a in avaliacoes:
-        aval_id = get(a, "id", 0)
-        data = get(a, "data_avaliacao", 1)
-        dor = get(a, "percentual_dor", 2)
-        obs = get(a, "observacoes", 3)
-        pet_nome = get(a, "pet_nome", 4)
-        pet_esp = get(a, "pet_especie", 5)
+    # Exibir avaliações em cards expansíveis
+    for aval in avaliacoes:
+        aval_id = aval.get("id")
+        data = aval.get("data_avaliacao", "Data desconhecida")
+        dor = aval.get("percentual_dor", 0)
+        obs = aval.get("observacoes", "")
+        pet_nome = aval.get("pet_nome", "Desconhecido")
+        pet_esp = aval.get("pet_especie", "Desconhecida")
 
-        with st.expander(f"{pet_nome} — {pet_esp} — {data} — Dor: {dor}%"):
-            st.write(f"📅 **Data:** {data}")
-            st.write(f"🐾 **Pet:** {pet_nome} ({pet_esp})")
-            st.write(f"🔥 **Percentual de Dor:** {dor}%")
+        # Formata a data
+        try:
+            data_obj = pd.to_datetime(data)
+            data_formatada = data_obj.strftime("%d/%m/%Y %H:%M")
+        except:
+            data_formatada = str(data)
+
+        # Card expansível
+        with st.expander(f"🐾 {pet_nome} — {pet_esp} — {data_formatada} — Dor: {dor}%"):
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.write(f"📅 **Data:** {data_formatada}")
+                st.write(f"🐾 **Pet:** {pet_nome}")
+                st.write(f"🏷️ **Espécie:** {pet_esp}")
+
+            with col2:
+                # Barra de progresso para dor
+                st.write(f"🔥 **Percentual de Dor:** {dor}%")
+                st.progress(dor / 100)
+
+            st.divider()
+
             st.write("📝 **Observações:**")
-            st.write(obs or "Nenhuma observação.")
+            st.write(obs if obs else "_Nenhuma observação registrada._")
 
-            if st.button("🗑 Deletar avaliação", key=f"del_{aval_id}"):
-                try:
-                    deletar_avaliacao(aval_id)
-                    st.success("Avaliação deletada com sucesso.")
-                    st.experimental_rerun()
-                except Exception as e:
-                    st.error(f"Erro ao deletar avaliação: {e}")
+            st.divider()
+
+            # Botões de ação
+            col_delete, col_export = st.columns(2)
+
+            with col_delete:
+                if st.button("🗑️ Deletar avaliação", key=f"del_{aval_id}"):
+                    sucesso, mensagem = deletar_avaliacao(aval_id)
+                    if sucesso:
+                        st.success(mensagem)
+                        st.rerun()
+                    else:
+                        st.error(mensagem)
+
+            with col_export:
+                # Exportar como JSON
+                import json
+                json_data = json.dumps({
+                    "id": aval_id,
+                    "pet": f"{pet_nome} ({pet_esp})",
+                    "data": data_formatada,
+                    "percentual_dor": dor,
+                    "observacoes": obs
+                }, ensure_ascii=False, indent=2)
+
+                st.download_button(
+                    label="📥 Exportar JSON",
+                    data=json_data,
+                    file_name=f"avaliacao_{aval_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                    mime="application/json",
+                    key=f"export_{aval_id}"
+                )
+
+    # Resumo geral
+    st.divider()
+    st.subheader("📈 Resumo Geral")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Total de Avaliações", len(avaliacoes))
+
+    with col2:
+        dor_media = sum(a.get("percentual_dor", 0) for a in avaliacoes) / len(avaliacoes)
+        st.metric("Dor Média", f"{dor_media:.1f}%")
+
+    with col3:
+        dor_maxima = max(a.get("percentual_dor", 0) for a in avaliacoes)
+        st.metric("Dor Máxima Registrada", f"{dor_maxima}%")
+
+__all__ = ["render"]
