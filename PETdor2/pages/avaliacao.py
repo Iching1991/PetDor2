@@ -5,43 +5,33 @@ from datetime import datetime
 import json
 
 # ===============================================
-# IMPORTS (compatíveis com streamlit_app.py)
+# IMPORT CORRETO (OPÇÃO A confirmada)
 # ===============================================
-from database.supabase_client import supabase
+from PETdor2.database.supabase_client import supabase
+
 from especies.index import (
     get_especies_nomes,
     buscar_especie_por_id,
     get_escala_labels
 )
 
+
 # ===============================================
 # Acesso ao Banco de Dados - SUPABASE
 # ===============================================
-
 def carregar_pets_do_usuario(usuario_id: int) -> list[dict]:
     """Retorna todos os pets cadastrados pelo usuário via Supabase."""
-    try:
-        response = (
-            supabase
-            .from_("pets")
-            .select("id, nome, especie")
-            .eq("tutor_id", usuario_id)
-            .order("nome", desc=False)
-            .execute()
-        )
-    except Exception as e:
-        st.error(f"Erro ao acessar Supabase: {e}")
-        return []
+    response = (
+        supabase
+        .from_("pets")
+        .select("id, nome, especie")
+        .eq("tutor_id", usuario_id)
+        .order("nome", desc=False)
+        .execute()
+    )
 
-    pets = None
-
-    # Compatibilidade com versões diferentes do client
-    if hasattr(response, "data"):
-        pets = response.data
-    elif isinstance(response, dict) and "data" in response:
-        pets = response["data"]
-
-    return pets or []
+    pets = response.data if getattr(response, "data", None) else []
+    return pets
 
 
 def salvar_avaliacao(pet_id: int, usuario_id: int, especie: str, respostas_json: str, pontuacao_total: int):
@@ -55,18 +45,15 @@ def salvar_avaliacao(pet_id: int, usuario_id: int, especie: str, respostas_json:
         "criado_em": datetime.utcnow().isoformat()
     }
 
-    try:
-        res = supabase.table("avaliacoes").insert(payload).execute()
-        if hasattr(res, "error") and res.error:
-            raise RuntimeError(res.error)
-    except Exception as e:
-        raise RuntimeError(f"Erro ao salvar avaliação: {e}")
+    res = supabase.table("avaliacoes").insert(payload).execute()
+
+    if getattr(res, "error", None):
+        raise RuntimeError(f"Erro ao salvar avaliação: {res.error}")
 
 
 # ===============================================
 # Interface da Página
 # ===============================================
-
 def render():
     usuario = st.session_state.get("usuario")
 
@@ -116,7 +103,7 @@ def render():
     pontuacao_total = 0
 
     # ----------------------------
-    # Loop das Categorias e Perguntas
+    # Loop das Categorias
     # ----------------------------
     for categoria in categorias:
         st.markdown(f"### 🔹 {categoria['nome']}")
@@ -147,7 +134,6 @@ def render():
     # ----------------------------
     if st.button("Salvar Avaliação"):
         respostas_json = json.dumps(respostas, ensure_ascii=False)
-
         try:
             salvar_avaliacao(
                 pet_id,
