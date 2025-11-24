@@ -24,26 +24,25 @@ def render():
 
     # Valida token
     with st.spinner("⏳ Validando token..."):
-        token_valido, msg, email = validar_token_reset(token)
+        token_valido, dados = validar_token_reset(token)
 
     if not token_valido:
-        st.error(f"❌ {msg}")
+        st.error(f"❌ {dados.get('erro', 'Token inválido.')}")
         st.info("Solicite um novo link na página de login.")
         return
 
+    email = dados.get("email", "seu e-mail")
     st.success(f"✅ Token válido para **{email}**")
     st.divider()
 
     # Formulário de redefinição
     st.subheader("📝 Nova Senha")
-
     nova_senha = st.text_input(
         "Nova senha",
         type="password",
         key="input_nova_senha",
         help="Mínimo 8 caracteres"
     )
-
     confirmar_senha = st.text_input(
         "Confirmar senha",
         type="password",
