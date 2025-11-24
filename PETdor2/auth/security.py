@@ -164,4 +164,3 @@ __all__ = [
     "usuario_logado",
     "logout",
 ]
-
