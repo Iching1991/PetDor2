@@ -5,7 +5,7 @@ from datetime import datetime
 import json
 
 # ===============================================
-# IMPORTS (compatíveis com streamlit_app.py que adiciona PETdor2/ ao sys.path)
+# IMPORTS (compatíveis com streamlit_app.py)
 # ===============================================
 from database.supabase_client import supabase
 from especies.index import (
@@ -14,23 +14,33 @@ from especies.index import (
     get_escala_labels
 )
 
-
 # ===============================================
 # Acesso ao Banco de Dados - SUPABASE
 # ===============================================
+
 def carregar_pets_do_usuario(usuario_id: int) -> list[dict]:
     """Retorna todos os pets cadastrados pelo usuário via Supabase."""
-    # Note: response.data pode ser None se não houver resultados
-    response = (
-        supabase
-        .from_("pets")
-        .select("id, nome, especie")
-        .eq("tutor_id", usuario_id)
-        .order("nome", desc=False)  # se a sua versão do client usar outro arg, ajuste
-        .execute()
-    )
-    # Se o supabase-py usar `.data`:
-    pets = response.data if getattr(response, "data", None) is not None else (response.get("data") if isinstance(response, dict) else None)
+    try:
+        response = (
+            supabase
+            .from_("pets")
+            .select("id, nome, especie")
+            .eq("tutor_id", usuario_id)
+            .order("nome", desc=False)
+            .execute()
+        )
+    except Exception as e:
+        st.error(f"Erro ao acessar Supabase: {e}")
+        return []
+
+    pets = None
+
+    # Compatibilidade com versões diferentes do client
+    if hasattr(response, "data"):
+        pets = response.data
+    elif isinstance(response, dict) and "data" in response:
+        pets = response["data"]
+
     return pets or []
 
 
@@ -42,19 +52,21 @@ def salvar_avaliacao(pet_id: int, usuario_id: int, especie: str, respostas_json:
         "especie": especie,
         "respostas_json": respostas_json,
         "pontuacao_total": pontuacao_total,
-        # armazenamos em ISO para evitar problemas; Supabase aceita timestamps ISO
-        "criado_em": datetime.utcnow().isoformat()  # UTC é uma boa prática
+        "criado_em": datetime.utcnow().isoformat()
     }
 
-    res = supabase.table("avaliacoes").insert(payload).execute()
-    # opcional: checar erros
-    if getattr(res, "error", None):
-        raise RuntimeError(f"Erro ao salvar avaliação: {res.error}")
+    try:
+        res = supabase.table("avaliacoes").insert(payload).execute()
+        if hasattr(res, "error") and res.error:
+            raise RuntimeError(res.error)
+    except Exception as e:
+        raise RuntimeError(f"Erro ao salvar avaliação: {e}")
 
 
 # ===============================================
 # Interface da Página
 # ===============================================
+
 def render():
     usuario = st.session_state.get("usuario")
 
@@ -77,7 +89,6 @@ def render():
         st.info("Você ainda não cadastrou nenhum pet.")
         return
 
-    # Garantir que cada item tem id, nome, especie
     opcoes_pet = {
         f"{p.get('nome')} ({p.get('especie')})": p.get("id")
         for p in pets
@@ -121,11 +132,10 @@ def render():
             )
 
             respostas[texto] = escolha
-            # labels.index() deve existir — se labels forem strings com valores iguais, ajustar
+
             try:
                 pontuacao_total += labels.index(escolha)
             except ValueError:
-                # fallback caso label não seja encontrado
                 pontuacao_total += 0
 
         st.divider()
@@ -137,6 +147,7 @@ def render():
     # ----------------------------
     if st.button("Salvar Avaliação"):
         respostas_json = json.dumps(respostas, ensure_ascii=False)
+
         try:
             salvar_avaliacao(
                 pet_id,
@@ -148,6 +159,3 @@ def render():
             st.success("Avaliação salva com sucesso! ✅")
         except Exception as e:
             st.error(f"Erro ao salvar avaliação: {e}")
-
-
-
