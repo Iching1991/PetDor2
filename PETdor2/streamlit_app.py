@@ -1,32 +1,21 @@
-import os
 import sys
+import os
+import streamlit as st
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR))
+# ==========================================
+# CORREÇÃO DE PATH — FUNCIONA NO STREAMLIT CLOUD
+# ==========================================
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))          # /PETdor2
+PROJECT_ROOT = BASE_DIR                                        # raiz do projeto
+
+# Garante que PETdor2/ está no sys.path
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-# ==========================================================
-# AJUSTE DE PATH (CORRETO E ÚNICO)
-# ==========================================================
-
-# Caminho do arquivo atual: .../PETdor2/streamlit_app.py
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))           # /PETdor2
-PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))    # /mount/src/petdor2
-
-# Garante que o diretório do app esteja no sys.path
-if BASE_DIR not in sys.path:
-    sys.path.insert(0, BASE_DIR)
-
-# Garante que o diretório raiz também esteja no sys.path
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
-
-
-# ==========================================================
-# IMPORTAÇÕES INTERNAS
-# ==========================================================
+# ==========================================
+# IMPORTAÇÃO DAS PÁGINAS DO SISTEMA
+# ==========================================
 
 from pages.login import render as login_app
 from pages.cadastro import render as cadastro_app
@@ -39,13 +28,16 @@ from pages.confirmar_email import render as confirmar_email_app
 from pages.password_reset import render as password_reset_app
 from pages.recuperar_senha import render as recuperar_senha_app
 
+# ==========================================
+# IMPORTS INTERNOS
+# ==========================================
+
 from utils.notifications import verificar_confirmacao_email
 from auth.security import usuario_logado, logout
 
-
-# ==========================================================
+# ==========================================
 # CONFIGURAÇÃO DO STREAMLIT
-# ==========================================================
+# ==========================================
 
 st.set_page_config(
     page_title="PetDor - Avaliação de Dor Animal",
@@ -53,12 +45,12 @@ st.set_page_config(
     layout="wide",
 )
 
-
-# ==========================================================
-# SISTEMA DE NAVEGAÇÃO
-# ==========================================================
+# ==========================================
+# SISTEMA DE NAVEGAÇÃO ENTRE PÁGINAS
+# ==========================================
 
 def navegar():
+    """Controla qual página deve ser exibida."""
     if "pagina" not in st.session_state:
         st.session_state.pagina = "login"
 
@@ -82,10 +74,9 @@ def navegar():
     else:
         st.error(f"Página '{pagina}' não encontrada.")
 
-
-# ==========================================================
-# MENU LATERAL
-# ==========================================================
+# ==========================================
+# MENU LATERAL (APÓS LOGIN)
+# ==========================================
 
 def menu_lateral():
     with st.sidebar:
@@ -119,13 +110,13 @@ def menu_lateral():
                 logout()
                 st.session_state.pagina = "login"
                 st.rerun()
+
         else:
             st.info("Faça login para acessar todas as funcionalidades.")
 
-
-# ==========================================================
+# ==========================================
 # APLICAÇÃO PRINCIPAL
-# ==========================================================
+# ==========================================
 
 def main():
     user = usuario_logado()
@@ -136,6 +127,6 @@ def main():
     menu_lateral()
     navegar()
 
-
 if __name__ == "__main__":
     main()
+
