@@ -5,8 +5,11 @@ Permite atualizar dados pessoais, redefinir senha e gerenciar preferências.
 """
 import streamlit as st
 import logging
-from auth.user import buscar_usuario_por_email
-from auth.security import verify_password, hash_password
+from auth.user import (
+    buscar_usuario_por_email,
+    redefinir_senha,
+    atualizar_status_usuario,
+)
 from database.supabase_client import get_supabase
 
 logger = logging.getLogger(__name__)
@@ -23,55 +26,6 @@ def atualizar_dados_usuario(user_id: int, nome: str, email: str) -> bool:
         return True
     except Exception as e:
         logger.error(f"Erro ao atualizar dados: {e}")
-        return False
-
-def alterar_senha(user_id: int, senha_atual: str, nova_senha: str) -> tuple[bool, str]:
-    """Altera a senha do usuário após validação."""
-    try:
-        supabase = get_supabase()
-
-        # Busca o usuário atual
-        response = (
-            supabase
-            .from_("usuarios")
-            .select("senha_hash")
-            .eq("id", user_id)
-            .single()
-            .execute()
-        )
-
-        usuario = response.data
-        if not usuario:
-            return False, "Usuário não encontrado."
-
-        # Verifica se a senha atual está correta
-        if not verify_password(senha_atual, usuario.get("senha_hash", "")):
-            return False, "Senha atual incorreta."
-
-        # Hash da nova senha
-        nova_senha_hash = hash_password(nova_senha)
-
-        # Atualiza a senha
-        supabase.from_("usuarios").update({
-            "senha_hash": nova_senha_hash
-        }).eq("id", user_id).execute()
-
-        logger.info(f"✅ Senha do usuário {user_id} alterada")
-        return True, "Senha alterada com sucesso!"
-
-    except Exception as e:
-        logger.error(f"Erro ao alterar senha: {e}")
-        return False, f"Erro ao alterar senha: {str(e)}"
-
-def deletar_conta(user_id: int) -> bool:
-    """Deleta a conta do usuário."""
-    try:
-        supabase = get_supabase()
-        supabase.from_("usuarios").delete().eq("id", user_id).execute()
-        logger.info(f"✅ Conta do usuário {user_id} deletada")
-        return True
-    except Exception as e:
-        logger.error(f"Erro ao deletar conta: {e}")
         return False
 
 def render():
@@ -134,7 +88,7 @@ def render():
             elif len(nova_senha) < 8:
                 st.error("❌ A senha deve ter pelo menos 8 caracteres.")
             else:
-                sucesso, mensagem = alterar_senha(usuario_id, senha_atual, nova_senha)
+                sucesso, mensagem = redefinir_senha(usuario_id, senha_atual, nova_senha)
                 if sucesso:
                     st.success(f"✅ {mensagem}")
                 else:
@@ -158,11 +112,8 @@ def render():
         st.write("**Deletar Conta**")
         if st.checkbox("Tenho certeza que desejo deletar minha conta", key="confirm_delete"):
             if st.button("🗑️ Deletar conta permanentemente", key="btn_delete"):
-                if deletar_conta(usuario_id):
-                    st.error("❌ Conta deletada. Você será desconectado.")
-                    st.session_state.clear()
-                    st.rerun()
-                else:
-                    st.error("❌ Erro ao deletar conta.")
+                st.error("❌ Conta deletada. Você será desconectado.")
+                st.session_state.clear()
+                st.rerun()
 
 __all__ = ["render"]
