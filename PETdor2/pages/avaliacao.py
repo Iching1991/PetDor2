@@ -1,22 +1,12 @@
 # PETdor2/pages/avaliacao.py
 
-import os
-import sys
-import json
 import streamlit as st
 from datetime import datetime
+import json
 
-# ============================================
-# Garantir que PETdor2/ esteja no sys.path
-# ============================================
-current_dir = os.path.dirname(os.path.abspath(__file__))
-root_dir = os.path.abspath(os.path.join(current_dir, ".."))  # PETdor2/
-if root_dir not in sys.path:
-    sys.path.insert(0, root_dir)
-
-# ============================================
-# IMPORTS ABSOLUTOS – OBRIGATÓRIOS NO CLOUD
-# ============================================
+# ===============================================
+# IMPORTS ABSOLUTOS — compatíveis com Streamlit Cloud
+# ===============================================
 from PETdor2.database.connection import conectar_db
 from PETdor2.database.models import Pet
 from PETdor2.especies.index import (
@@ -25,10 +15,11 @@ from PETdor2.especies.index import (
     get_escala_labels
 )
 
-# ==========================================================
-# Funções de acesso ao banco
-# ==========================================================
-def carregar_pets_do_usuario(usuario_id: int):
+
+# ===============================================
+# Acesso ao Banco de Dados
+# ===============================================
+def carregar_pets_do_usuario(usuario_id: int) -> list[dict]:
     """Retorna todos os pets cadastrados pelo usuário."""
     conn = conectar_db()
     cur = conn.cursor()
@@ -67,9 +58,9 @@ def salvar_avaliacao(pet_id: int, usuario_id: int, especie: str, respostas_json:
     conn.close()
 
 
-# ==========================================================
-# Interface principal
-# ==========================================================
+# ===============================================
+# Interface da Página
+# ===============================================
 def render():
     usuario = st.session_state.get("usuario")
 
@@ -82,7 +73,7 @@ def render():
     usuario_id = usuario["id"]
 
     # ----------------------------
-    # Selecionar PET
+    # Seleção do PET
     # ----------------------------
     st.subheader("🐾 Selecione o Pet")
 
@@ -112,14 +103,14 @@ def render():
         st.error(f"⚠ A espécie '{especie}' não possui escala configurada.")
         return
 
-    st.subheader(f"🐶 Avaliação para espécie: **{especie}**")
+    st.subheader(f"🐶 Avaliação para espécie: **{especie_cfg['nome']}**")
 
     categorias = especie_cfg.get("categorias", [])
     respostas = {}
     pontuacao_total = 0
 
     # ----------------------------
-    # Loop das perguntas
+    # Loop das Categorias e Perguntas
     # ----------------------------
     for categoria in categorias:
         st.markdown(f"### 🔹 {categoria['nome']}")
@@ -142,7 +133,7 @@ def render():
     st.markdown(f"## 🧮 Pontuação Total: **{pontuacao_total}**")
 
     # ----------------------------
-    # Botão Salvar
+    # Salvar Resultado
     # ----------------------------
     if st.button("Salvar Avaliação"):
         respostas_json = json.dumps(respostas, ensure_ascii=False)
