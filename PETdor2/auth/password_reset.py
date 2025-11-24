@@ -4,10 +4,10 @@ Módulo de recuperação de senha - gerencia reset de senhas.
 Usa tokens JWT com expiração de 1 hora.
 """
 import logging
-from datetime import datetime, timedelta
 import os
+from datetime import datetime, timedelta
 from .security import generate_reset_token, verify_reset_token, hash_password
-from utils.email_sender import enviar_email_recuperacao_senha
+from utils.email_sender import enviar_email_reset_senha
 from database.supabase_client import get_supabase
 
 logger = logging.getLogger(__name__)
@@ -62,15 +62,12 @@ def solicitar_reset_senha(email: str) -> tuple[bool, str]:
         # 4. Enviar e-mail
         try:
             reset_link = f"{os.getenv('STREAMLIT_APP_URL', 'http://localhost:8501')}?action=reset_password&token={token}"
-            email_enviado, msg_email = enviar_email_recuperacao_senha(
-                email_db, 
-                nome, 
-                reset_link
-            )
-            if email_enviado:
-                logger.info(f"✅ E-mail de redefinição enviado para {email_db}")
+            enviado = enviar_email_reset_senha(email_db, nome, token)
+
+            if enviado:
+                logger.info(f"✅ E-mail de reset enviado para {email_db}")
             else:
-                logger.warning(f"Falha ao enviar e-mail para {email_db}: {msg_email}")
+                logger.warning(f"⚠️ Falha ao enviar e-mail de reset para {email_db}")
 
         except Exception as e:
             logger.warning(f"Erro ao enviar e-mail: {e}")
@@ -81,87 +78,93 @@ def solicitar_reset_senha(email: str) -> tuple[bool, str]:
         logger.error(f"Erro em solicitar_reset_senha: {e}", exc_info=True)
         return True, "Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha."
 
-def validar_token_reset(token: str) -> tuple[bool, str, str]:
+def validar_token_reset(token: str) -> str | None:
     """
-    Verifica se um token de redefinição de senha é válido e não expirou.
-    Retorna (True, mensagem, email_usuario) ou (False, mensagem, None)
+    Verifica token JWT (via security) e também valida expiração registrada no banco.
+    Retorna e-mail se válido, None caso contrário.
     """
     try:
+        # 1. Primeiro valida JWT
+        email = verify_reset_token(token)
+
+        if not email:
+            logger.warning("Token JWT inválido")
+            return None
+
+        # 2. Busca no Supabase
         supabase = get_supabase()
 
-        # 1. Valida token JWT
-        token_valido, resultado = verify_reset_token(token)
-
-        if not token_valido:
-            logger.warning(f"Tentativa de validação com token inválido")
-            return False, resultado, None  # resultado contém a mensagem de erro
-
-        email = resultado  # resultado contém o email
-
-        # 2. Verifica se o token ainda está no banco de dados
         response = (
             supabase
             .from_("usuarios")
-            .select("id, reset_password_expires")
+            .select("email, reset_password_expires")
             .eq("reset_password_token", token)
+            .single()
             .execute()
         )
 
         if not response.data:
-            logger.warning(f"Tentativa de validação com token não encontrado no banco")
-            return False, "Token de redefinição inválido ou já utilizado.", None
+            logger.warning(f"Token não encontrado no banco: {token}")
+            return None
 
-        usuario = response.data[0]
-        expires_at = usuario.get("reset_password_expires")
+        usuario = response.data
+        email_db = usuario["email"]
+        expires_str = usuario["reset_password_expires"]
 
-        # 3. Verifica expiração
-        if not expires_at or datetime.fromisoformat(expires_at) < datetime.utcnow():
-            logger.warning(f"Tentativa de validação com token expirado para {email}")
-            return False, "Token de redefinição expirado. Solicite um novo.", None
+        # 3. Validar expiração
+        if isinstance(expires_str, str):
+            expires_dt = datetime.fromisoformat(expires_str)
+        else:
+            expires_dt = expires_str
 
-        logger.info(f"✅ Token de reset válido para {email}")
-        return True, "Token válido.", email
+        if expires_dt < datetime.utcnow():
+            logger.warning(f"Token expirado para {email_db}")
+            return None
+
+        logger.info(f"✅ Token válido para {email_db}")
+        return email_db
 
     except Exception as e:
         logger.error(f"Erro em validar_token_reset: {e}", exc_info=True)
-        return False, "Erro ao validar token.", None
+        return None
 
 def redefinir_senha_com_token(token: str, nova_senha: str) -> tuple[bool, str]:
     """
-    Redefine a senha de um usuário usando um token válido.
+    Redefine senha se token válido; limpa token no DB.
     """
     try:
         # 1. Validar token
-        token_valido, msg, email_usuario = validar_token_reset(token)
-        if not token_valido:
-            return False, msg
+        email = validar_token_reset(token)
+        if not email:
+            return False, "Token inválido ou expirado."
 
         # 2. Validar força da senha
         if len(nova_senha) < 8:
             return False, "Senha deve ter pelo menos 8 caracteres."
 
-        # 3. Criar hash da nova senha
-        senha_hash = hash_password(nova_senha)
+        # 3. Hash da nova senha
+        hashed = hash_password(nova_senha)
 
-        # 4. Atualizar Supabase: nova senha e invalidar token
+        # 4. Atualizar Supabase
         supabase = get_supabase()
+
         update_response = (
             supabase
             .from_("usuarios")
             .update({
-                "senha_hash": senha_hash,
+                "senha_hash": hashed,
                 "reset_password_token": None,
                 "reset_password_expires": None
             })
-            .eq("email", email_usuario)
+            .eq("email", email)
             .execute()
         )
 
         if not update_response.data:
-            logger.error(f"Erro ao redefinir senha para {email_usuario}")
-            return False, "Erro interno ao redefinir senha."
+            logger.error(f"Erro ao redefinir senha para {email}")
+            return False, "Erro ao redefinir senha."
 
-        logger.info(f"✅ Senha redefinida com sucesso para {email_usuario}")
+        logger.info(f"✅ Senha redefinida com sucesso para {email}")
         return True, "Senha redefinida com sucesso. Você já pode fazer login."
 
     except Exception as e:
