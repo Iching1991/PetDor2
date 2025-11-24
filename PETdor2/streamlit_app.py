@@ -25,7 +25,7 @@ if PROJECT_ROOT not in sys.path:
 
 from pages.login import render as login_app
 from pages.cadastro import render as cadastro_app
-from pages.avaliacao import render as avaliacao_app
+from PETdor2.pages.avaliacao import render as avaliacao_app
 from pages.cadastro_pet import render as cadastro_pet_app
 from pages.historico import render as historico_app
 from pages.admin import render as admin_app
