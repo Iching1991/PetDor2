@@ -1,11 +1,9 @@
-# PETdor_2.0/especies/porquinho_da_india.py
-
+# PETdor2/especies/porquinho_da_india.py
 """
 🐹 Configuração de avaliação para PORQUINHOS-DA-ÍNDIA
 Escala: 0 a 7 — baseada em sinais comportamentais e clínicos.
 """
-
-from .index import EspecieConfig, Pergunta  # Ajuste conforme localização real
+from .config import EspecieConfig, Pergunta
 
 CONFIG_PORQUINHO_DA_INDIA = EspecieConfig(
     nome="Porquinho-da-Índia",
@@ -35,3 +33,5 @@ CONFIG_PORQUINHO_DA_INDIA = EspecieConfig(
         Pergunta(texto="A respiração parece mais rápida ou difícil", invertida=False, peso=1.0),
     ]
 )
+
+__all__ = ["CONFIG_PORQUINHO_DA_INDIA"]
