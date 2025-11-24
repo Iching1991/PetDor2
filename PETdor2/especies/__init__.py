@@ -3,6 +3,7 @@
 Pacote de espécies - configurações de avaliação de dor por tipo animal.
 Gerencia o registro dinâmico de espécies e suas escalas de avaliação.
 """
+from .base import EspecieConfig, Pergunta
 from .index import (
     registrar_especie,
     buscar_especie_por_id,
@@ -13,6 +14,8 @@ from .index import (
 )
 
 __all__ = [
+    "EspecieConfig",
+    "Pergunta",
     "registrar_especie",
     "buscar_especie_por_id",
     "listar_especies",
@@ -20,3 +23,5 @@ __all__ = [
     "get_especies_ids",
     "get_escala_labels",
 ]
+
+
