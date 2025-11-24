@@ -1,8 +1,7 @@
-# PETdor2/auth/__init__.py
+# PETdor2/database/__init__.py
 """
-Pacote de autenticação - gerencia login, registro e segurança.
+Pacote de banco de dados - gerencia conexões com Supabase.
 """
-from . import user
-from . import security
+from .supabase_client import get_supabase, testar_conexao
 
-__all__ = ["user", "security"]
+__all__ = ["get_supabase", "testar_conexao"]
