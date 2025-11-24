@@ -1,180 +1,80 @@
-# PETdor2/auth/password_reset.py
+# PETdor2/pages/password_reset.py
 """
-Módulo de recuperação de senha - gerencia reset de senhas.
-Gera tokens JWT, valida expiração e permite redefinição segura.
+Página de redefinição de senha usando token JWT.
+O usuário recebe um link com token e redefine a senha aqui.
 """
+import streamlit as st
 import logging
-from datetime import datetime, timedelta
-from .security import generate_reset_token, verify_reset_token, hash_password
-from utils.email_sender import enviar_email_reset_senha
-from database.supabase_client import get_supabase
+from auth.password_reset import validar_token_reset, redefinir_senha_com_token
 
 logger = logging.getLogger(__name__)
 
-def solicitar_reset_senha(email: str) -> tuple[bool, str]:
-    """
-    Gera token JWT de reset, salva no DB e envia e-mail.
-    Retorna (True, msg) sempre que possível para não vazar existência.
-    """
-    try:
-        supabase = get_supabase()
+def render():
+    """Renderiza a página de redefinição de senha."""
+    st.header("🔐 Redefinir Senha")
 
-        # 1. Buscar usuário
-        response = (
-            supabase
-            .from_("usuarios")
-            .select("id, nome, email")
-            .eq("email", email.lower())
-            .single()
-            .execute()
-        )
+    # Obtém token da URL
+    query_params = st.query_params
+    token = query_params.get("token", [None])[0]
 
-        usuario = response.data
+    if not token:
+        st.warning("⚠️ Token de redefinição não fornecido.")
+        st.info("Verifique o link enviado para seu e-mail.")
+        return
 
-        if not usuario:
-            # Não revelar existência por segurança
-            logger.warning(f"Tentativa de reset para e-mail não encontrado: {email}")
-            return True, "Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha."
+    # Valida token
+    with st.spinner("⏳ Validando token..."):
+        token_valido, msg, email = validar_token_reset(token)
 
-        usuario_id = usuario["id"]
-        nome = usuario["nome"]
-        email_db = usuario["email"]
+    if not token_valido:
+        st.error(f"❌ {msg}")
+        st.info("Solicite um novo link na página de login.")
+        return
 
-        # 2. Gerar token JWT
-        token = generate_reset_token(email_db)
-        expires_at = datetime.utcnow() + timedelta(hours=1)
+    st.success(f"✅ Token válido para **{email}**")
+    st.divider()
 
-        # 3. Salvar token no banco
-        update_response = (
-            supabase
-            .from_("usuarios")
-            .update({
-                "reset_password_token": token,
-                "reset_password_expires": expires_at.isoformat()
-            })
-            .eq("id", usuario_id)
-            .execute()
-        )
+    # Formulário de redefinição
+    st.subheader("📝 Nova Senha")
 
-        if not update_response.data:
-            logger.error(f"Erro ao salvar token para {email_db}")
-            return True, "Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha."
+    nova_senha = st.text_input(
+        "Nova senha",
+        type="password",
+        key="input_nova_senha",
+        help="Mínimo 8 caracteres"
+    )
 
-        # 4. Enviar e-mail
-        try:
-            enviado = enviar_email_reset_senha(email_db, nome, token)
+    confirmar_senha = st.text_input(
+        "Confirmar senha",
+        type="password",
+        key="input_confirmar_senha"
+    )
 
-            if enviado:
-                logger.info(f"✅ E-mail de reset enviado para {email_db}")
-            else:
-                logger.warning(f"⚠️ Falha ao enviar e-mail de reset para {email_db}")
+    if st.button("🔄 Redefinir Senha", key="btn_redefinir"):
+        # Validações
+        if not nova_senha or not confirmar_senha:
+            st.error("❌ Preencha todos os campos.")
+            return
 
-            return True, "Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha."
-
-        except Exception as e:
-            logger.error(f"Erro ao enviar e-mail: {e}", exc_info=True)
-            return True, "Se o e-mail estiver cadastrado, você receberá um link para redefinir a senha."
-
-    except Exception as e:
-        logger.error(f"Erro em solicitar_reset_senha: {e}", exc_info=True)
-        return False, "Erro interno ao solicitar redefinição."
-
-def validar_token_reset(token: str) -> str | None:
-    """
-    Verifica token JWT (via security) e também valida expiração no banco.
-    Retorna e-mail se válido, None caso contrário.
-    """
-    try:
-        # 1. Primeiro valida JWT
-        email = verify_reset_token(token)
-        if not email:
-            logger.warning(f"Token JWT inválido: {token[:20]}...")
-            return None
-
-        supabase = get_supabase()
-
-        # 2. Busca token no banco e valida expiração
-        response = (
-            supabase
-            .from_("usuarios")
-            .select("email, reset_password_expires")
-            .eq("reset_password_token", token)
-            .single()
-            .execute()
-        )
-
-        usuario = response.data
-
-        if not usuario:
-            logger.warning(f"Token não encontrado no banco: {token[:20]}...")
-            return None
-
-        email_db = usuario["email"]
-        expires_str = usuario["reset_password_expires"]
-
-        # 3. Converte string → datetime
-        if isinstance(expires_str, str):
-            expires_dt = datetime.fromisoformat(expires_str)
-        else:
-            expires_dt = expires_str
-
-        # 4. Valida expiração
-        if expires_dt < datetime.utcnow():
-            logger.warning(f"Token expirado para {email_db}")
-            return None
-
-        logger.info(f"✅ Token válido para {email_db}")
-        return email_db
-
-    except Exception as e:
-        logger.error(f"Erro em validar_token_reset: {e}", exc_info=True)
-        return None
-
-def redefinir_senha_com_token(token: str, nova_senha: str) -> tuple[bool, str]:
-    """
-    Redefine senha se token válido; limpa token no DB.
-    """
-    try:
-        # 1. Validar token
-        email = validar_token_reset(token)
-        if not email:
-            return False, "Token inválido ou expirado."
-
-        # 2. Validar força da senha
         if len(nova_senha) < 8:
-            return False, "Senha deve ter pelo menos 8 caracteres."
+            st.error("❌ Senha deve ter pelo menos 8 caracteres.")
+            return
 
-        # 3. Hash da nova senha
-        hashed = hash_password(nova_senha)
+        if nova_senha != confirmar_senha:
+            st.error("❌ As senhas não correspondem.")
+            return
 
-        supabase = get_supabase()
+        # Redefine senha
+        with st.spinner("⏳ Redefinindo senha..."):
+            sucesso, mensagem = redefinir_senha_com_token(token, nova_senha)
 
-        # 4. Atualizar senha e limpar token
-        update_response = (
-            supabase
-            .from_("usuarios")
-            .update({
-                "senha_hash": hashed,
-                "reset_password_token": None,
-                "reset_password_expires": None
-            })
-            .eq("email", email)
-            .execute()
-        )
+        if sucesso:
+            st.success(mensagem)
+            st.info("🔐 Você já pode fazer login com sua nova senha!")
+            if st.button("🔐 Ir para Login"):
+                st.session_state.pagina = "login"
+                st.rerun()
+        else:
+            st.error(f"❌ {mensagem}")
 
-        if not update_response.data:
-            logger.error(f"Erro ao redefinir senha para {email}")
-            return False, "Erro ao redefinir senha."
-
-        logger.info(f"✅ Senha redefinida para {email}")
-        return True, "Senha redefinida com sucesso. Você já pode fazer login."
-
-    except Exception as e:
-        logger.error(f"Erro em redefinir_senha_com_token: {e}", exc_info=True)
-        return False, "Erro interno ao redefinir senha."
-
-__all__ = [
-    "solicitar_reset_senha",
-    "validar_token_reset",
-    "redefinir_senha_com_token",
-]
+__all__ = ["render"]
