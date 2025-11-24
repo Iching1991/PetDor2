@@ -36,7 +36,7 @@ from pages.recuperar_senha import render as recuperar_senha_app
 # IMPORTS INTERNOS
 # ==========================================================
 
-from utils.notifications import verificar_confirmacao_email
+from utils.notifications import enviar_notificacao
 from auth.security import usuario_logado, logout
 
 # ==========================================================
