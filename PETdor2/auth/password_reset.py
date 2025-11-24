@@ -1,4 +1,4 @@
-# PETdor2/auth/password_reset.py
+# PETdor2/auth/password_reset.py (atualizado)
 """
 Módulo de recuperação de senha - gerencia reset de senhas.
 """
@@ -7,24 +7,20 @@ from datetime import datetime, timedelta
 import os
 from .security import generate_reset_token, verify_reset_token, hash_password
 from utils.email_sender import enviar_email_recuperacao_senha
+from database.supabase_client import get_supabase
 
 logger = logging.getLogger(__name__)
 
-# ==========================
-# Solicitar reset de senha
-# ==========================
 def solicitar_reset_senha(email):
     """
     Gera um token de redefinição de senha para o e-mail fornecido e envia um e-mail.
     """
     from database.supabase_client import get_supabase  # import local para evitar ciclo
-
     try:
         supabase = get_supabase()
 
         # 1. Buscar usuário no Supabase
         resp = supabase.table("usuarios").select("*").eq("email", email).execute()
-
         if not resp.data:
             # Retornamos mensagem genérica por segurança
             logger.warning(f"Tentativa de reset de senha para e-mail não encontrado: {email}")
@@ -54,7 +50,6 @@ def solicitar_reset_senha(email):
                 usuario["nome"], 
                 reset_link
             )
-
             if email_enviado:
                 logger.info(f"E-mail de redefinição enviado para {email}.")
             else:
@@ -70,60 +65,64 @@ def solicitar_reset_senha(email):
         logger.error(f"Erro em solicitar_reset_senha: {e}", exc_info=True)
         return False, "Erro interno ao processar solicitação."
 
-# ==========================
-# Validar token
-# ==========================
 def validar_token_reset(token):
     """
     Verifica se um token de redefinição de senha é válido e não expirou.
     Retorna (True, mensagem, email_usuario) ou (False, mensagem, None)
     """
     from database.supabase_client import get_supabase  # import local
-
     try:
         supabase = get_supabase()
 
-        resp = supabase.table("usuarios").select("*").eq("reset_password_token", token).execute()
+        # Valida token JWT
+        token_valido, resultado = verify_reset_token(token)
 
+        if not token_valido:
+            logger.warning(f"Tentativa de validação com token inválido")
+            return False, resultado, None  # resultado contém a mensagem de erro
+
+        email = resultado  # resultado contém o email
+
+        # Verifica se o token ainda está no banco de dados
+        resp = supabase.table("usuarios").select("*").eq("reset_password_token", token).execute()
         if not resp.data:
-            logger.warning(f"Tentativa de validação com token inválido: {token}")
+            logger.warning(f"Tentativa de validação com token não encontrado no banco")
             return False, "Token de redefinição inválido ou já utilizado.", None
 
         usuario = resp.data[0]
         expires_at = usuario.get("reset_password_expires")
 
         if not expires_at or datetime.fromisoformat(expires_at) < datetime.now():
-            logger.warning(f"Tentativa de validação com token expirado para {usuario['email']}")
+            logger.warning(f"Tentativa de validação com token expirado para {email}")
             return False, "Token de redefinição expirado. Solicite um novo.", None
 
-        logger.info(f"Token de reset válido para {usuario['email']}")
-        return True, "Token válido.", usuario["email"]
+        logger.info(f"Token de reset válido para {email}")
+        return True, "Token válido.", email
 
     except Exception as e:
         logger.error(f"Erro em validar_token_reset: {e}", exc_info=True)
         return False, "Erro ao validar token.", None
 
-# ==========================
-# Redefinir senha com token
-# ==========================
 def redefinir_senha_com_token(token, nova_senha):
     """
     Redefine a senha de um usuário usando um token válido.
     """
     from database.supabase_client import get_supabase  # import local
-
     try:
         # 1. Validar token
         token_valido, msg, email_usuario = validar_token_reset(token)
         if not token_valido:
             return False, msg
 
-        # 2. Criar hash da nova senha
+        # 2. Validar força da senha
+        if len(nova_senha) < 8:
+            return False, "Senha deve ter pelo menos 8 caracteres."
+
+        # 3. Criar hash da nova senha
         senha_hash = hash_password(nova_senha)
 
-        # 3. Atualizar Supabase: nova senha e invalidar token
+        # 4. Atualizar Supabase: nova senha e invalidar token
         supabase = get_supabase()
-
         update_resp = supabase.table("usuarios").update({
             "senha_hash": senha_hash,
             "reset_password_token": None,
@@ -146,4 +145,3 @@ __all__ = [
     "validar_token_reset",
     "redefinir_senha_com_token",
 ]
-
