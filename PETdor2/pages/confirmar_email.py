@@ -1,30 +1,48 @@
 # PETdor2/pages/confirmar_email.py
-
+"""
+Página de confirmação de e-mail após registro.
+O usuário recebe um link com token e confirma seu e-mail aqui.
+"""
 import streamlit as st
-from PETdor2.auth.email_confirmation import confirmar_email
+import logging
+from auth.email_confirmation import validar_token_confirmacao, confirmar_email
 
+logger = logging.getLogger(__name__)
 
 def render():
-    st.title("📨 Confirmação de E-mail")
+    """Renderiza a página de confirmação de e-mail."""
+    st.header("📧 Confirmar E-mail")
 
-    token = st.query_params.get("token", None)
+    # Obtém token da URL
+    query_params = st.query_params
+    token = query_params.get("token", [None])[0]
 
     if not token:
-        st.error("Token não fornecido na URL.")
+        st.warning("⚠️ Token de confirmação não fornecido.")
+        st.info("Verifique o link enviado para seu e-mail.")
         return
 
-    with st.spinner("Validando token..."):
-        sucesso, msg = confirmar_email(token)
+    # Valida token
+    with st.spinner("⏳ Validando token..."):
+        token_valido, usuario_id = validar_token_confirmacao(token)
+
+    if not token_valido:
+        st.error("❌ Token inválido ou expirado.")
+        st.info("Solicite um novo link de confirmação.")
+        return
+
+    # Token válido - confirma e-mail
+    sucesso, mensagem = confirmar_email(usuario_id)
 
     if sucesso:
-        st.success(msg)
-        st.info("Agora você já pode fazer login.")
+        st.success("✅ E-mail confirmado com sucesso!")
+        st.info("Você já pode fazer login na plataforma.")
 
-        # Ajuste para navegação interna do Streamlit
-        if st.button("Ir para Login"):
+        if st.button("🔐 Ir para Login", key="btn_login_after_confirm"):
             st.session_state.pagina = "login"
-            st.experimental_rerun()
-
+            st.rerun()
     else:
-        st.error(msg)
-        st.warning("Peça um novo link na página de login.")
+        st.error(f"❌ Erro ao confirmar e-mail: {mensagem}")
+        st.info("Tente novamente ou solicite um novo link.")
+
+__all__ = ["render"]
