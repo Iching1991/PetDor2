@@ -1,109 +1,156 @@
 # PETdor2/auth/email_confirmation.py
+"""
+Módulo de confirmação de e-mail - gerencia tokens e confirmação.
+"""
 import logging
+import os
+from .security import generate_email_confirmation_token, verify_email_confirmation_token
+from database.supabase_client import get_supabase
+from utils.email_sender import enviar_email_confirmacao
+
 logger = logging.getLogger(__name__)
 
-# ==========================
-# Confirmar e-mail
-# ==========================
-def confirmar_email(token: str) -> tuple[bool, str]:
+def gerar_token_confirmacao(usuario_id: int, email: str) -> str:
+    """Gera um token de confirmação de e-mail."""
+    return generate_email_confirmation_token(usuario_id, email)
+
+def validar_token_confirmacao(token: str) -> tuple[bool, int]:
     """
-    Valida token JWT e confirma o e-mail do usuário.
-    Retorna (True, msg) ou (False, msg).
+    Valida um token de confirmação.
+    Retorna (True, usuario_id) se válido, (False, None) se inválido.
+    """
+    valido, usuario_id, email = verify_email_confirmation_token(token)
+    return valido, usuario_id
+
+def confirmar_email(usuario_id: int) -> tuple[bool, str]:
+    """Marca o e-mail como confirmado no banco de dados."""
+    try:
+        supabase = get_supabase()
+
+        response = (
+            supabase
+            .from_("usuarios")
+            .update({"email_confirmado": True})
+            .eq("id", usuario_id)
+            .execute()
+        )
+
+        if response.data:
+            logger.info(f"✅ E-mail confirmado para usuário {usuario_id}")
+            return True, "✅ E-mail confirmado com sucesso!"
+        else:
+            return False, "❌ Erro ao confirmar e-mail."
+
+    except Exception as e:
+        logger.error(f"Erro ao confirmar e-mail: {e}", exc_info=True)
+        return False, f"❌ Erro: {e}"
+
+def enviar_confirmacao_email(usuario_id: int, email: str, nome: str) -> tuple[bool, str]:
+    """
+    Gera token e envia e-mail de confirmação.
     """
     try:
-        from database.supabase_client import supabase  # import local
-        from auth.security import verify_email_token
+        supabase = get_supabase()
 
-        email = verify_email_token(token)
-        if not email:
-            return False, "Token inválido ou expirado."
+        # 1. Gera token
+        token = gerar_token_confirmacao(usuario_id, email)
 
-        # Buscar usuário com token válido
-        resp = supabase.table("usuarios").select("*")\
-            .eq("email", email)\
-            .eq("email_confirm_token", token)\
-            .eq("email_confirmado", False)\
+        # 2. Salva token no Supabase
+        update_response = (
+            supabase
+            .from_("usuarios")
+            .update({"email_confirm_token": token})
+            .eq("id", usuario_id)
             .execute()
+        )
 
-        if resp.error:
-            logger.error(f"Erro ao consultar usuário: {resp.error.message}")
-            return False, "Erro interno ao confirmar e-mail."
+        if not update_response.data:
+            logger.error(f"Erro ao salvar token de confirmação para {email}")
+            return False, "Erro ao gerar link de confirmação."
 
-        if not resp.data:
-            return False, "Token já utilizado ou não corresponde a nenhum usuário."
+        # 3. Cria link de confirmação
+        confirm_link = f"{os.getenv('STREAMLIT_APP_URL', 'http://localhost:8501')}?action=confirm_email&token={token}"
 
-        usuario_id = resp.data[0]["id"]
+        # 4. Envia e-mail
+        email_enviado, mensagem = enviar_email_confirmacao(email, nome, confirm_link)
 
-        # Atualizar usuário para confirmado
-        upd_resp = supabase.table("usuarios").update({
-            "email_confirmado": True,
-            "email_confirm_token": None
-        }).eq("id", usuario_id).execute()
+        if email_enviado:
+            logger.info(f"✅ E-mail de confirmação enviado para {email}")
+            return True, "✅ E-mail de confirmação enviado com sucesso!"
+        else:
+            logger.warning(f"Erro ao enviar e-mail de confirmação para {email}: {mensagem}")
+            return False, mensagem
 
-        if upd_resp.error:
-            logger.error(f"Erro ao atualizar usuário {usuario_id}: {upd_resp.error.message}")
-            return False, "Erro interno ao confirmar e-mail."
+    except Exception as e:
+        logger.error(f"Erro em enviar_confirmacao_email: {e}", exc_info=True)
+        return False, f"Erro ao enviar e-mail: {e}"
 
-        return True, "E-mail confirmado com sucesso."
-
-    except Exception:
-        logger.error("Erro em confirmar_email", exc_info=True)
-        return False, "Erro interno ao confirmar e-mail."
-
-
-# ==========================
-# Reenviar e-mail de confirmação
-# ==========================
 def reenviar_email_confirmacao(email: str) -> tuple[bool, str]:
     """
     Reenvia novo token para confirmação de e-mail.
     Nunca revela se o e-mail existe ou não.
     """
     try:
-        from database.supabase_client import supabase  # import local
-        from auth.security import generate_email_token
-        from utils.email_sender import enviar_email_confirmacao as enviar_email  # função de envio de email
-        from os import getenv
+        supabase = get_supabase()
 
-        # Buscar usuário
-        resp = supabase.table("usuarios").select("*").eq("email", email.lower()).execute()
-        if resp.error:
-            logger.error(f"Erro ao consultar usuário {email}: {resp.error.message}")
-            return False, "Erro interno ao reenviar e-mail de confirmação."
+        # 1. Buscar usuário
+        resp = (
+            supabase
+            .from_("usuarios")
+            .select("id, nome, email, email_confirmado")
+            .eq("email", email.lower())
+            .execute()
+        )
 
         if not resp.data:
             # Não revela se existe
+            logger.warning(f"Tentativa de reenvio para e-mail não encontrado: {email}")
             return True, "Se o e-mail estiver cadastrado, você receberá um link."
 
         usuario = resp.data[0]
 
+        # 2. Verifica se já está confirmado
         if usuario.get("email_confirmado"):
-            return True, "Conta já confirmada."
+            logger.info(f"Tentativa de reenvio para e-mail já confirmado: {email}")
+            return True, "Sua conta já foi confirmada."
 
-        # Gerar novo token
-        novo_token = generate_email_token(email)
+        # 3. Gerar novo token
+        novo_token = gerar_token_confirmacao(usuario["id"], email)
 
-        # Atualizar token no Supabase
-        upd_resp = supabase.table("usuarios").update({
-            "email_confirm_token": novo_token
-        }).eq("id", usuario["id"]).execute()
+        # 4. Atualizar token no Supabase
+        upd_resp = (
+            supabase
+            .from_("usuarios")
+            .update({"email_confirm_token": novo_token})
+            .eq("id", usuario["id"])
+            .execute()
+        )
 
-        if upd_resp.error:
-            logger.error(f"Erro ao atualizar token de usuário {usuario['id']}: {upd_resp.error.message}")
-            return False, "Erro interno ao reenviar e-mail de confirmação."
+        if not upd_resp.data:
+            logger.error(f"Erro ao atualizar token de confirmação para {usuario['id']}")
+            return False, "Erro ao gerar novo link de confirmação."
 
-        # Criar link de confirmação
-        confirm_link = f"{getenv('STREAMLIT_APP_URL')}?action=confirm_email&token={novo_token}"
+        # 5. Criar link de confirmação
+        confirm_link = f"{os.getenv('STREAMLIT_APP_URL', 'http://localhost:8501')}?action=confirm_email&token={novo_token}"
 
-        # Enviar e-mail
-        email_ok, msg = enviar_email(email, usuario["nome"], confirm_link)
+        # 6. Enviar e-mail
+        email_ok, msg = enviar_email_confirmacao(email, usuario["nome"], confirm_link)
+
         if email_ok:
-            logger.info(f"E-mail de confirmação reenviado para {email}")
-            return True, "E-mail de confirmação reenviado."
+            logger.info(f"✅ E-mail de confirmação reenviado para {email}")
+            return True, "✅ E-mail de confirmação reenviado com sucesso!"
         else:
             logger.warning(f"Falha ao enviar e-mail de confirmação para {email}: {msg}")
-            return False, "Erro ao enviar e-mail de confirmação."
+            return True, "Se o e-mail estiver cadastrado, você receberá um link."
 
-    except Exception:
-        logger.error("Erro em reenviar_email_confirmacao", exc_info=True)
-        return False, "Erro interno ao reenviar e-mail."
+    except Exception as e:
+        logger.error(f"Erro em reenviar_email_confirmacao: {e}", exc_info=True)
+        return True, "Se o e-mail estiver cadastrado, você receberá um link."
+
+__all__ = [
+    "gerar_token_confirmacao",
+    "validar_token_confirmacao",
+    "confirmar_email",
+    "enviar_confirmacao_email",
+    "reenviar_email_confirmacao",
+]
