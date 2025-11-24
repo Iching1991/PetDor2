@@ -1,50 +1,46 @@
+# PETdor2/pages/confirmar_email.py
+"""
+Página de confirmação de e-mail após registro.
+O usuário recebe um link com token e confirma seu e-mail aqui.
+"""
 import streamlit as st
-from auth.user import verificar_credenciais, buscar_usuario_por_email
+import logging
+from auth.email_confirmation import validar_token_confirmacao, confirmar_email
+
+logger = logging.getLogger(__name__)
 
 def render():
-    st.header("🔐 Login")
+    """Renderiza a página de confirmação de e-mail."""
+    st.header("📧 Confirmar E-mail")
 
-    # Se já está logado, mostrar resumo e botão de logout
-    if st.session_state.get("usuario"):
-        usuario = st.session_state.usuario
-        st.success(f"Você já está logado como **{usuario['nome']}** ({usuario['email']}).")
-        if st.button("Sair"):
-            st.session_state.usuario = None
-            st.session_state.pagina = "login"
-            st.rerun()
+    # Obtém token da URL
+    query_params = st.query_params
+    token = query_params.get("token", [None])[0]
+
+    if not token:
+        st.warning("⚠️ Token de confirmação não fornecido.")
+        st.info("Verifique o link enviado para seu e-mail.")
         return
 
-    # Formulário de login
-    email = st.text_input("E-mail")
-    senha = st.text_input("Senha", type="password")
+    # Valida token
+    token_valido, usuario_id = validar_token_confirmacao(token)
 
-    if st.button("Entrar"):
-        ok, resultado = verificar_credenciais(email, senha)
-        if not ok:
-            st.error(resultado)
-        else:
-            # Usuário autenticado com sucesso
-            st.session_state.usuario = resultado
-            st.success("Login realizado com sucesso!")
-            st.session_state.pagina = "avaliacao"  # Redireciona para avaliação
+    if not token_valido:
+        st.error("❌ Token inválido ou expirado.")
+        st.info("Solicite um novo link de confirmação.")
+        return
+
+    # Token válido - confirma e-mail
+    sucesso, mensagem = confirmar_email(usuario_id)
+
+    if sucesso:
+        st.success("✅ E-mail confirmado com sucesso!")
+        st.info("Você já pode fazer login na plataforma.")
+
+        if st.button("🔐 Ir para Login"):
+            st.session_state.pagina = "login"
             st.rerun()
+    else:
+        st.error(f"❌ Erro ao confirmar e-mail: {mensagem}")
 
-    st.markdown("---")
-
-    # Links úteis
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("Criar conta"):
-            st.session_state.pagina = "cadastro"
-            st.rerun()
-    with col2:
-        if st.button("Esqueci minha senha"):
-            st.session_state.pagina = "recuperar_senha"
-            st.rerun()
-
-    st.markdown("""
-        <br>
-        <p style='text-align:center;'>
-            Versão PETdor 2.0 — Sistema de avaliação de dor animal 🐾
-        </p>
-    """, unsafe_allow_html=True)
+__all__ = ["render"]
