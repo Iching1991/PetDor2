@@ -5,9 +5,10 @@ import streamlit as st
 # ==========================================================
 # CONFIGURAÇÃO DO PATH — garante que PETdor2 é reconhecido
 # ==========================================================
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # PETdor2/
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # .../PETdor2
 PROJECT_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))  # raiz do projeto
 
+# adiciona ao sys.path para que "pages" seja encontrado
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 if BASE_DIR not in sys.path:
