@@ -1,4 +1,4 @@
-# PETdor2/pages/cadastro_pet.py
+# PETdor2/backend/pages/cadastro_pet.py
 import sys
 import os
 import streamlit as st
@@ -11,18 +11,19 @@ if root_dir not in sys.path:
     sys.path.insert(0, root_dir)
 # --- Fim correção ---
 
+from ..database.connection import conectar_db  # import relativo para DB
+from ..especies.index import listar_especies  # lista de espécies local
+
 # ==========================================================
 # Helpers
 # ==========================================================
-
 def format_especie_nome(especie_cfg) -> str:
-    """Formatador para exibir nome da espécie no selectbox."""
+    """Formata nome da espécie no selectbox."""
     return especie_cfg.nome
 
 def cadastrar_pet_db(tutor_id: int, nome: str, especie_nome: str, raca: Optional[str]=None, peso: Optional[float]=None) -> bool:
     """Insere um novo pet no banco."""
     try:
-        from database.connection import conectar_db  # import local
         conn = conectar_db()
         cur = conn.cursor()
         sql = """
@@ -41,7 +42,6 @@ def cadastrar_pet_db(tutor_id: int, nome: str, especie_nome: str, raca: Optional
 def listar_pets_db(tutor_id: int) -> List[Dict[str, Any]]:
     """Lista pets do tutor."""
     try:
-        from database.connection import conectar_db  # import local
         conn = conectar_db()
         cur = conn.cursor()
         cur.execute("SELECT * FROM pets WHERE tutor_id = ?", (tutor_id,))
@@ -53,15 +53,9 @@ def listar_pets_db(tutor_id: int) -> List[Dict[str, Any]]:
     finally:
         conn.close()
 
-def listar_especies_local():
-    """Lista espécies usando import local para Streamlit Cloud."""
-    from especies.index import listar_especies
-    return listar_especies()
-
 # ==========================================================
 # Página principal
 # ==========================================================
-
 def render():
     st.header("🐾 Cadastro de Pet")
 
@@ -74,7 +68,7 @@ def render():
 
     with st.form("form_cadastro_pet"):
         nome = st.text_input("Nome do pet")
-        especies = listar_especies_local()
+        especies = listar_especies()
         especie_cfg = st.selectbox(
             "Espécie",
             options=especies,
@@ -111,6 +105,3 @@ def render():
             raca_pet = p.get("raca") or "Raça não informada"
             peso_pet = f"{p.get('peso')} kg" if p.get("peso") else "Peso não informado"
             st.write(f"- **{nome_pet}** — {especie_pet} — {raca_pet} — {peso_pet}")
-
-
-
