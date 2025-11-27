@@ -6,7 +6,7 @@ import logging
 from datetime import datetime
 
 from .security import hash_password, verify_password
-from database.supabase_client import get_supabase
+from backend.database.supabase_client import get_supabase
 
 logger = logging.getLogger(__name__)
 
@@ -195,3 +195,4 @@ __all__ = [
     "atualizar_tipo_usuario",
     "atualizar_status_usuario",
 ]
+
