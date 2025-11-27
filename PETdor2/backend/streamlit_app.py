@@ -20,8 +20,8 @@ from auth.user import (
     cadastrar_usuario,
     verificar_credenciais,
     buscar_usuario_por_email,
-    confirmar_email,
 )
+
 from auth.password_reset import solicitar_reset_senha, validar_token_reset, redefinir_senha_com_token
 from pages.cadastro_pet import render as cadastro_pet_app_render # Renomeado para evitar conflito
 from pages.avaliacao import render as avaliacao_app_render # Renomeado para evitar conflito
