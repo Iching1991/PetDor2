@@ -1,47 +1,56 @@
-# PETdor2/pages/confirmar_email.py
-"""
-Página de confirmação de e-mail após registro.
-O usuário recebe um link com token e confirma seu e-mail aqui.
-"""
+# PETdor2/backend/pages/login.py
 import streamlit as st
 import logging
-from auth.email_confirmation import validar_token_confirmacao, confirmar_email
+from auth.login_handler import autenticar_usuario
+from utils.ui import mostrar_logo
+from utils.session import iniciar_sessao
 
 logger = logging.getLogger(__name__)
 
+def get_query_params():
+    """Compatível com qualquer versão do Streamlit."""
+    try:
+        return st.query_params  # v1.30+
+    except Exception:
+        return st.experimental_get_query_params()  # versões antigas
+
 def render():
-    """Renderiza a página de confirmação de e-mail."""
-    st.header("📧 Confirmar E-mail")
+    st.title("🔐 Login")
 
-    # Obtém token da URL
-    query_params = st.experimental_get_query_params()
-    token = query_params.get("token", [None])[0]
+    # Obtém query params (ex: token, redirect etc.)
+    query_params = get_query_params()
 
-    if not token:
-        st.warning("⚠️ Token de confirmação não fornecido.")
-        st.info("Verifique o link enviado para seu e-mail.")
-        return
+    # Exibe logo se existir no seu UI
+    try:
+        mostrar_logo()
+    except:
+        pass  # não trava se a função não existir
 
-    # Valida token
-    token_valido, usuario_id = validar_token_confirmacao(token)
+    st.subheader("Acesse sua conta")
 
-    if not token_valido:
-        st.error("❌ Token inválido ou expirado.")
-        st.info("Solicite um novo link de confirmação.")
-        return
+    email = st.text_input("E-mail")
+    senha = st.text_input("Senha", type="password")
 
-    # Token válido - confirma e-mail
-    sucesso, mensagem = confirmar_email(usuario_id)
+    if st.button("Entrar"):
+        if not email or not senha:
+            st.warning("Preencha todos os campos.")
+            return
 
-    if sucesso:
-        st.success("✅ E-mail confirmado com sucesso!")
-        st.info("Você já pode fazer login na plataforma.")
+        sucesso, dados = autenticar_usuario(email, senha)
 
-        if st.button("🔐 Ir para Login"):
-            st.session_state.pagina = "login"
-            st.rerun()
-    else:
-        st.error(f"❌ Erro ao confirmar e-mail: {mensagem}")
+        if not sucesso:
+            st.error("❌ E-mail ou senha inválidos.")
+            return
 
-__all__ = ["render"]
+        # Inicia sessão do usuário
+        iniciar_sessao(dados)
 
+        st.success("✅ Login realizado com sucesso!")
+        st.rerun()
+
+    st.markdown("---")
+
+    st.info("Ainda não tem conta?")
+    if st.button("Criar conta"):
+        st.session_state.pagina = "registrar"
+        st.rerun()
