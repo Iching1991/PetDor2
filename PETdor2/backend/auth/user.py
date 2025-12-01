@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional, Tuple
 
 # Importações absolutas a partir do pacote 'backend'
-from database.supabase_client import get_supabase # Importa get_supabase diretamente
+from database.supabase_client import get_supabase
 from auth.security import hash_password, verify_password # Importa as funções de hash e verificação de senha
 
 logger = logging.getLogger(__name__)
@@ -13,29 +13,32 @@ logger = logging.getLogger(__name__)
 # VERIFICAÇÃO DE CREDENCIAIS
 # ==========================================================
 def verificar_credenciais(email: str, senha: str) -> Tuple[bool, Dict[str, Any]]:
-    """Verifica as credenciais do usuário (email e senha) no Supabase."""
+    """
+    Verifica as credenciais do usuário (email e senha) no Supabase.
+    Retorna (True, dados_usuario) em caso de sucesso, ou (False, {"erro": mensagem}) em caso de falha.
+    """
     try:
         supabase = get_supabase()
         response = supabase.from_("usuarios").select("*").eq("email", email.lower()).single().execute()
         usuario = response.data
 
         if not usuario:
-            logger.warning(f"Tentativa de login com email não encontrado: {email}")
+            logger.warning(f"Tentativa de login falhou: Usuário não encontrado para {email}")
             return False, {"erro": "Usuário não encontrado."}
 
         # Verifica se a senha fornecida corresponde ao hash armazenado
         if not verify_password(senha, usuario.get("senha_hash", "")):
-            logger.warning(f"Tentativa de login com senha incorreta para {email}")
+            logger.warning(f"Tentativa de login falhou: Senha incorreta para {email}")
             return False, {"erro": "Senha incorreta."}
 
         # Verifica se o e-mail foi confirmado
         if not usuario.get("email_confirmado", False):
-            logger.warning(f"Tentativa de login com email não confirmado para {email}")
+            logger.warning(f"Tentativa de login falhou: E-mail não confirmado para {email}")
             return False, {"erro": "Seu e-mail ainda não foi confirmado. Por favor, verifique sua caixa de entrada."}
 
         # Verifica se o usuário está ativo
-        if not usuario.get("ativo", False):
-            logger.warning(f"Tentativa de login com usuário inativo: {email}")
+        if not usuario.get("ativo", False): # Assume ativo=False se não especificado para segurança
+            logger.warning(f"Tentativa de login falhou: Usuário inativo para {email}")
             return False, {"erro": "Sua conta está inativa. Entre em contato com o suporte."}
 
         logger.info(f"✅ Login bem-sucedido para {email}")
@@ -97,13 +100,13 @@ def cadastrar_usuario(nome: str, email: str, senha: str, tipo: str = "Tutor", pa
         return False, f"❌ Erro ao cadastrar: {str(e)}"
 
 # ==========================================================
-# ATUALIZAÇÃO DE USUÁRIO (Adicionadas para o streamlit_app.py)
+# ATUALIZAÇÃO DE USUÁRIO
 # ==========================================================
 def atualizar_tipo_usuario(user_id: int, novo_tipo: str) -> bool:
     """Atualiza o tipo de usuário (Tutor, Veterinario, Admin, Clinica) no Supabase."""
     try:
         supabase = get_supabase()
-        data_to_update = {"tipo": novo_tipo} # O nome da coluna é 'tipo', não 'tipo_usuario'
+        data_to_update = {"tipo": novo_tipo}
         response = supabase.from_("usuarios").update(data_to_update).eq("id", user_id).execute()
         if response.data:
             logger.info(f"Tipo de usuário para ID {user_id} atualizado para '{novo_tipo}'.")
@@ -118,7 +121,7 @@ def atualizar_status_usuario(user_id: int, novo_status: str) -> bool:
     """Atualiza o status do usuário (ex: 'ativo', 'inativo', 'pendente_confirmacao') no Supabase."""
     try:
         supabase = get_supabase()
-        data_to_update = {"status": novo_status} # Assumindo que você tem uma coluna 'status'
+        data_to_update = {"status": novo_status}
         response = supabase.from_("usuarios").update(data_to_update).eq("id", user_id).execute()
         if response.data:
             logger.info(f"Status de usuário para ID {user_id} atualizado para '{novo_status}'.")
@@ -129,4 +132,42 @@ def atualizar_status_usuario(user_id: int, novo_status: str) -> bool:
         logger.error(f"Erro inesperado ao atualizar status de usuário para ID {user_id}: {e}", exc_info=True)
         return False
 
-# Nota: As funções de redefinir_senha não estão aqui, elas devem estar em auth.password_reset.py
+def redefinir_senha(email: str, nova_senha: str) -> bool:
+    """
+    Redefine a senha de um usuário no Supabase.
+    Retorna True em caso de sucesso, False em caso de falha.
+    """
+    try:
+        supabase = get_supabase()
+        nova_senha_hash = hash_password(nova_senha)
+        data_to_update = {"senha_hash": nova_senha_hash}
+        # Atualiza a senha para o usuário com o email fornecido
+        response = supabase.from_("usuarios").update(data_to_update).eq("email", email.lower()).execute()
+
+        if not response.data:
+            logger.error(f"Falha ao redefinir senha para o email {email}: {response.status_code} - {response.text}")
+            return False
+        logger.info(f"✅ Senha para o email {email} redefinida com sucesso.")
+        return True
+    except Exception as e:
+        logger.error(f"Erro inesperado ao redefinir senha para o email {email}: {e}", exc_info=True)
+        return False
+
+def atualizar_email_confirmado(user_id: int, confirmado: bool = True) -> bool:
+    """
+    Atualiza o status de confirmação de e-mail do usuário.
+    Retorna True em caso de sucesso, False em caso de falha.
+    """
+    try:
+        supabase = get_supabase()
+        data_to_update = {"email_confirmado": confirmado}
+        response = supabase.from_("usuarios").update(data_to_update).eq("id", user_id).execute()
+
+        if not response.data:
+            logger.error(f"Falha ao atualizar status de confirmação de e-mail para ID {user_id}. Resposta: {response.data}")
+            return False
+        logger.info(f"✅ Status de confirmação de e-mail para ID {user_id} atualizado para '{confirmado}'.")
+        return True
+    except Exception as e:
+        logger.error(f"Erro inesperado ao atualizar status de confirmação de e-mail para ID {user_id}: {e}", exc_info=True)
+        return False
