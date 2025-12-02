@@ -15,24 +15,22 @@ from .user import (
     atualizar_status_usuario,
     alterar_senha,
     deletar_usuario,
-    marcar_email_como_confirmado,
+    marcar_email_como_confirmado, # Agora é importado de user
 )
 
 from .password_reset import (
     solicitar_reset_senha,
-    validar_token_reset, # Renomeado para validar_token_reset_senha em security.py
     redefinir_senha_com_token,
-    limpar_tokens_reset_expirados,
 )
 
 from .email_confirmation import (
+    enviar_email_confirmacao,
     confirmar_email_com_token,
-    enviar_email_confirmacao, # Adicionado para ser acessível
 )
 
 from .security import (
-    hash_password, # Nomes atualizados
-    verify_password, # Nomes atualizados
+    hash_password,
+    verify_password,
     gerar_token_jwt,
     validar_token_jwt,
     gerar_token_reset_senha,
@@ -43,8 +41,8 @@ from .security import (
     logout,
 )
 
+# Define quais funções serão expostas quando alguém fizer 'from auth import ...'
 __all__ = [
-    # user.py
     "cadastrar_usuario",
     "verificar_credenciais",
     "buscar_usuario_por_id",
@@ -56,17 +54,12 @@ __all__ = [
     "deletar_usuario",
     "marcar_email_como_confirmado",
 
-    # password_reset.py
     "solicitar_reset_senha",
-    "validar_token_reset", # Manter para compatibilidade se usado em outro lugar
     "redefinir_senha_com_token",
-    "limpar_tokens_reset_expirados",
 
-    # email_confirmation.py
-    "confirmar_email_com_token",
     "enviar_email_confirmacao",
+    "confirmar_email_com_token",
 
-    # security.py
     "hash_password",
     "verify_password",
     "gerar_token_jwt",
