@@ -1,10 +1,9 @@
 # PetDor2/backend/database/__init__.py
 """
-Camada de acesso a dados usando Supabase.
-Exponha aqui apenas o que for realmente usado pelo resto do app.
+Pacote de acesso ao banco de dados Supabase.
+Expõe funções do supabase_client para importação simplificada.
 """
-
-# Importa todas as funções do supabase_client.py e as expõe diretamente
+# Importa as funções diretamente do módulo supabase_client
 from .supabase_client import (
     get_supabase,
     testar_conexao,
@@ -14,6 +13,7 @@ from .supabase_client import (
     supabase_table_delete,
 )
 
+# Define quais funções serão expostas quando o pacote 'database' for importado
 __all__ = [
     "get_supabase",
     "testar_conexao",
