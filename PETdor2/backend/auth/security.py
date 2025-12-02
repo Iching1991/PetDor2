@@ -1,8 +1,7 @@
-# PetDor2/auth/security.py
+# PetDor2/backend/auth/security.py
 """
 Módulo de segurança do PETDOR
-Inclui hashing de senha (bcrypt), verificação e tokens JWT (melhor que tokens simples).
-Mantém compatibilidade com funções antigas.
+Inclui hashing de senha (bcrypt), verificação e tokens JWT.
 """
 import bcrypt
 import jwt
@@ -13,16 +12,17 @@ from typing import Tuple, Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-# Chave secreta para JWT - DEVE ser definida no .env
-SECRET_KEY = os.getenv("SECRET_KEY", "sua_chave_secreta_aqui_mudar_em_producao")
+# Chave secreta para JWT - DEVE ser definida no .env ou secrets do Streamlit Cloud
+# Use uma chave forte e aleatória em produção!
+SECRET_KEY = os.getenv("SECRET_KEY", "sua_chave_secreta_aqui_mudar_em_producao_e_ser_longa")
 ALGORITHM = "HS256"
 
 # -------------------------------
-# HASH DE SENHA (mantido igual)
+# HASH DE SENHA
 # -------------------------------
-def gerar_hash_senha(senha: str) -> str:
+def hash_password(senha: str) -> str: # Renomeado de gerar_hash_senha
     """
-    Gera um hash seguro para a senha (compatível com código antigo).
+    Gera um hash seguro para a senha usando bcrypt.
     """
     try:
         hash_senha = bcrypt.hashpw(senha.encode('utf-8'), bcrypt.gensalt())
@@ -32,11 +32,11 @@ def gerar_hash_senha(senha: str) -> str:
         raise
 
 # -------------------------------
-# VALIDAR SENHA (mantido igual)
+# VALIDAR SENHA
 # -------------------------------
-def verificar_senha(senha: str, hash_senha: str) -> bool:
+def verify_password(senha: str, hash_senha: str) -> bool: # Renomeado de verificar_senha
     """
-    Verifica se a senha corresponde ao hash (compatível com código antigo).
+    Verifica se a senha fornecida corresponde ao hash armazenado.
     """
     try:
         return bcrypt.checkpw(senha.encode('utf-8'), hash_senha.encode('utf-8'))
@@ -45,7 +45,7 @@ def verificar_senha(senha: str, hash_senha: str) -> bool:
         return False
 
 # -------------------------------
-# TOKENS JWT (NOVO - melhor que tokens simples)
+# TOKENS JWT
 # -------------------------------
 def gerar_token_jwt(dados: Dict[str, Any], expiracao_horas: int = 1) -> str:
     """
@@ -79,7 +79,7 @@ def validar_token_jwt(token: str) -> Tuple[Optional[Dict[str, Any]], str]:
         return None, "Erro na validação do token"
 
 # -------------------------------
-# TOKENS PARA RESET DE SENHA (NOVO)
+# TOKENS PARA RESET DE SENHA
 # -------------------------------
 def gerar_token_reset_senha(email: str, user_id: int) -> str:
     """
@@ -88,25 +88,22 @@ def gerar_token_reset_senha(email: str, user_id: int) -> str:
     dados = {"tipo": "reset_senha", "email": email, "user_id": user_id}
     return gerar_token_jwt(dados, expiracao_horas=1)  # Expira em 1 hora
 
-def validar_token_reset_senha(token: str) -> Tuple[Optional[str], str]:
+def validar_token_reset_senha(token: str) -> Tuple[bool, Optional[str], str]: # Retorno ajustado
     """
-    Valida token de reset de senha e retorna email ou mensagem de erro.
+    Valida token de reset de senha e retorna (True, email, "Token válido") ou (False, None, mensagem de erro).
     """
     payload, mensagem = validar_token_jwt(token)
     if not payload:
-        return None, mensagem
-
+        return False, None, mensagem
     if payload.get("tipo") != "reset_senha":
-        return None, "Token inválido para reset de senha"
-
+        return False, None, "Token inválido para reset de senha"
     email = payload.get("email")
     if not email:
-        return None, "Token corrompido"
-
-    return email, "Token válido"
+        return False, None, "Token corrompido ou sem e-mail"
+    return True, email, "Token válido" # Retorna True e o email
 
 # -------------------------------
-# TOKENS PARA CONFIRMAÇÃO DE E-MAIL (NOVO)
+# TOKENS PARA CONFIRMAÇÃO DE E-MAIL
 # -------------------------------
 def gerar_token_confirmacao_email(email: str, user_id: int) -> str:
     """
@@ -115,44 +112,40 @@ def gerar_token_confirmacao_email(email: str, user_id: int) -> str:
     dados = {"tipo": "confirmacao_email", "email": email, "user_id": user_id}
     return gerar_token_jwt(dados, expiracao_horas=24)  # Expira em 24 horas
 
-def validar_token_confirmacao_email(token: str) -> Tuple[Optional[str], str]:
+def validar_token_confirmacao_email(token: str) -> Tuple[bool, Optional[str], str]: # Retorno ajustado
     """
-    Valida token de confirmação e-mail e retorna email ou mensagem de erro.
+    Valida token de confirmação e-mail e retorna (True, email, "Token válido") ou (False, None, mensagem de erro).
     """
     payload, mensagem = validar_token_jwt(token)
     if not payload:
-        return None, mensagem
-
+        return False, None, mensagem
     if payload.get("tipo") != "confirmacao_email":
-        return None, "Token inválido para confirmação de e-mail"
-
+        return False, None, "Token inválido para confirmação de e-mail"
     email = payload.get("email")
     if not email:
-        return None, "Token corrompido"
-
-    return email, "Token válido"
+        return False, None, "Token corrompido ou sem e-mail"
+    return True, email, "Token válido" # Retorna True e o email
 
 # -------------------------------
-# FUNÇÕES ANTIGAS (para compatibilidade)
+# FUNÇÕES ANTIGAS (para compatibilidade - MARCADAS PARA REMOÇÃO FUTURA)
 # -------------------------------
 def gerar_token(expiracao_horas: int = 1) -> Tuple[str, str]:
     """
-    Mantém compatibilidade com código antigo (tokens bcrypt simples).
+    Mantém compatibilidade com código antigo (tokens simples).
+    NÃO RECOMENDADO PARA PRODUÇÃO. Use JWT.
     """
-    try:
-        # Gera token simples (não recomendado para produção)
-        import secrets
-        token = secrets.token_urlsafe(32)
-        expira_em = (datetime.now() + timedelta(hours=expiracao_horas)).strftime("%Y-%m-%d %H:%M:%S")
-        return token, expira_em
-    except Exception as e:
-        logger.error(f"Erro ao gerar token simples: {e}")
-        raise
+    logger.warning("Usando função 'gerar_token' legada. Considere migrar para JWT.")
+    import secrets
+    token = secrets.token_urlsafe(32)
+    expira_em = (datetime.now() + timedelta(hours=expiracao_horas)).strftime("%Y-%m-%d %H:%M:%S")
+    return token, expira_em
 
 def token_valido(expira_em: str) -> bool:
     """
     Mantém compatibilidade com código antigo.
+    NÃO RECOMENDADO PARA PRODUÇÃO. Use JWT.
     """
+    logger.warning("Usando função 'token_valido' legada. Considere migrar para JWT.")
     try:
         return datetime.strptime(expira_em, "%Y-%m-%d %H:%M:%S") > datetime.now()
     except Exception as e:
@@ -172,11 +165,13 @@ def logout(session_state) -> None:
         del session_state["user_id"]
     if "user_data" in session_state:
         del session_state["user_data"]
+    if "page" in session_state: # Opcional: Redireciona para login após logout
+        session_state["page"] = "Login"
     logger.info("👋 Usuário fez logout")
 
 __all__ = [
-    "gerar_hash_senha",
-    "verificar_senha",
+    "hash_password", # Renomeado
+    "verify_password", # Renomeado
     "gerar_token_jwt",
     "validar_token_jwt",
     "gerar_token_reset_senha",
@@ -185,7 +180,7 @@ __all__ = [
     "validar_token_confirmacao_email",
     "usuario_logado",
     "logout",
-    # Compatibilidade
+    # Compatibilidade (manter por enquanto, mas com aviso)
     "gerar_token",
     "token_valido",
 ]
