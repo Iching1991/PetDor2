@@ -4,6 +4,7 @@
 Pacote de acesso ao banco de dados Supabase.
 Expõe funções do supabase_client para importação simplificada.
 """
+
 from .supabase_client import (
     get_supabase,
     testar_conexao,
