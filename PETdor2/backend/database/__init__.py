@@ -1,8 +1,7 @@
 # PetDor2/backend/database/__init__.py
 """
-"""
 Pacote de acesso ao banco de dados Supabase.
-Expõe funções do supabase_client para importação simplificada.
+Reexporta funções do supabase_client para facilitar importações no projeto.
 """
 
 from .supabase_client import (
