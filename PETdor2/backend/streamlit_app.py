@@ -11,21 +11,23 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # ===============================
-# Ajuste do sys.path para imports absolutos
+# Ajuste correto do sys.path
 # ===============================
-# Adiciona o diretório raiz do projeto (PETdor2/) ao sys.path
-# Isso permite importar módulos como 'backend.auth.user' ou 'backend.pages.login'
-PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
-if PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, PROJECT_ROOT)
+# Caminho atual → /PETdor2/backend/streamlit_app.py
+# Queremos adicionar /PETdor2/ ao sys.path
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+    logger.info(f"📂 BASE_DIR adicionado ao sys.path: {BASE_DIR}")
 
 # ===============================
-# Importações absolutas a partir do pacote 'backend'
+# Importações absolutas do backend
 # ===============================
-# Módulos de Banco de Dados
-from backend.database import testar_conexao # Corrigido: Importa do pacote database
+# Banco de dados
+from backend.database import testar_conexao
 
-# Módulos de Autenticação e Usuário
+# Autenticação
 from backend.auth.user import (
     cadastrar_usuario,
     verificar_credenciais,
@@ -39,7 +41,7 @@ from backend.auth.password_reset import (
 from backend.auth.email_confirmation import confirmar_email_com_token
 from backend.auth.security import usuario_logado, logout, validar_token_reset_senha
 
-# Módulos de Páginas
+# Páginas
 from backend.pages.login import render as login_app_render
 from backend.pages.cadastro import render as cadastro_app_render
 from backend.pages.cadastro_pet import render as cadastro_pet_app_render
@@ -47,7 +49,7 @@ from backend.pages.avaliacao import render as avaliacao_app_render
 from backend.pages.admin import render as admin_app_render
 from backend.pages.home import render as home_app_render
 
-# Módulos de Utilitários
+# Utils
 from backend.utils.config import APP_CONFIG, STREAMLIT_APP_URL
 
 # ===============================
@@ -60,34 +62,38 @@ st.set_page_config(
 )
 
 # ===============================
-# Inicialização e Teste de Conexão com Supabase
+# Inicialização e Teste Supabase
 # ===============================
 if "db_connected" not in st.session_state:
     st.session_state.db_connected = False
 
 if not st.session_state.db_connected:
     with st.spinner("Conectando ao banco de dados..."):
-        if testar_conexao():
+        sucesso, msg = testar_conexao()
+
+        if sucesso:
             st.session_state.db_connected = True
-            logger.info("✅ Conexão com Supabase estabelecida com sucesso.")
+            logger.info("✅ Conexão com Supabase estabelecida.")
         else:
-            st.error("❌ Falha ao conectar ao Supabase. Verifique as variáveis de ambiente.")
-            st.stop() # Para a execução se não conseguir conectar
+            st.error("❌ Falha ao conectar ao Supabase.")
+            st.error(msg)
+            st.stop()
 
 # ===============================
 # Inicialização do Session State
 # ===============================
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "user_id" not in st.session_state:
-    st.session_state.user_id = None
-if "user_data" not in st.session_state:
-    st.session_state.user_data = None
-if "page" not in st.session_state:
-    st.session_state.page = "Login" # Página padrão
+default_states = {
+    "logged_in": False,
+    "user_id": None,
+    "user_data": None,
+    "page": "Login",
+}
+
+for key, value in default_states.items():
+    st.session_state.setdefault(key, value)
 
 # ===============================
-# Processamento de Query Parameters (Confirmação/Reset de E-mail)
+# Tratamento de Query Params
 # ===============================
 query_params = st.query_params
 
@@ -95,107 +101,101 @@ if "action" in query_params and "token" in query_params:
     action = query_params["action"]
     token = query_params["token"]
 
+    # --------- Confirmação de Email ---------
     if action == "confirm_email":
-        st.subheader("Confirmação de E-mail")
-        with st.spinner("Confirmando seu e-mail..."):
+        st.subheader("Confirmando Email...")
+        with st.spinner("Processando..."):
             sucesso, mensagem = confirmar_email_com_token(token)
-            if sucesso:
-                st.success(mensagem)
-                st.info("Você pode fazer login agora.")
-            else:
-                st.error(mensagem)
-        # Limpa os query params para evitar reprocessamento
+
+        if sucesso:
+            st.success(mensagem)
+        else:
+            st.error(mensagem)
+
         st.query_params.clear()
-        st.session_state.page = "Login" # Redireciona para login
+        st.session_state.page = "Login"
         st.rerun()
 
+    # --------- Reset de Senha ---------
     elif action == "reset_password":
         st.subheader("Redefinir Senha")
-        with st.spinner("Validando token..."):
-            valido, email_do_token, msg_validacao = validar_token_reset_senha(token)
 
-            if valido and email_do_token:
-                st.success(msg_validacao)
-                nova_senha = st.text_input("Nova Senha", type="password", key="reset_nova_senha")
-                confirmar_nova_senha = st.text_input("Confirmar Nova Senha", type="password", key="reset_confirmar_senha")
+        valido, email_do_token, msg = validar_token_reset_senha(token)
 
-                if st.button("Redefinir Senha"):
-                    if not nova_senha or not confirmar_nova_senha:
-                        st.error("Por favor, preencha todos os campos de senha.")
-                    elif nova_senha != confirmar_nova_senha:
-                        st.error("As senhas não coincidem.")
-                    elif len(nova_senha) < 8:
-                        st.error("A senha deve ter pelo menos 8 caracteres.")
-                    else:
-                        sucesso_reset, msg_reset = redefinir_senha_com_token(token, nova_senha)
-                        if sucesso_reset:
-                            st.success(msg_reset)
-                            st.info("Sua senha foi redefinida. Você pode fazer login agora.")
-                            st.query_params.clear()
-                            st.session_state.page = "Login"
-                            st.rerun()
-                        else:
-                            st.error(msg_reset)
+        if not valido:
+            st.error(msg)
+            st.query_params.clear()
+            st.session_state.page = "Login"
+            st.rerun()
+
+        nova_senha = st.text_input("Nova senha", type="password")
+        confirmar = st.text_input("Confirmar senha", type="password")
+
+        if st.button("Redefinir"):
+            if not nova_senha or not confirmar:
+                st.error("Preencha todos os campos.")
+            elif nova_senha != confirmar:
+                st.error("As senhas não coincidem.")
+            elif len(nova_senha) < 8:
+                st.error("A senha deve ter no mínimo 8 caracteres.")
             else:
-                st.error(msg_validacao)
-        # Limpa os query params após a tentativa de reset, mesmo que falhe
-        st.query_params.clear()
-        st.session_state.page = "Login" # Redireciona para login
-        st.rerun()
+                sucesso, mensagem = redefinir_senha_com_token(token, nova_senha)
+                if sucesso:
+                    st.success(mensagem)
+                    st.query_params.clear()
+                    st.session_state.page = "Login"
+                    st.rerun()
+                else:
+                    st.error(mensagem)
 
 # ===============================
-# Lógica Principal do Aplicativo
+# Lógica da Interface
 # ===============================
 if usuario_logado(st.session_state):
-    st.session_state.logged_in = True # Garante que o estado está correto
+    st.session_state.logged_in = True
 
-    # Menu lateral para usuários logados
-    menu_options = ["Página Inicial", "Meus Pets e Avaliações", "Cadastro de Pet"]
-    if st.session_state.user_data and st.session_state.user_data.get("tipo") == "Admin":
-        menu_options.append("Administração")
+    st.sidebar.title(f"Bem-vindo(a), {st.session_state.user_data.get('nome', 'Usuário')}")
 
-    st.sidebar.title(f"Bem-vindo(a), {st.session_state.user_data.get('nome', 'Usuário')}!")
-    selected_page = st.sidebar.selectbox("Navegação", menu_options, key="logged_in_menu")
+    menu = ["Página Inicial", "Meus Pets e Avaliações", "Cadastro de Pet"]
+    if st.session_state.user_data.get("tipo") == "Admin":
+        menu.append("Administração")
 
-    if selected_page == "Página Inicial":
+    escolha = st.sidebar.selectbox("Navegação", menu)
+
+    if escolha == "Página Inicial":
         home_app_render()
-    elif selected_page == "Meus Pets e Avaliações":
+    elif escolha == "Meus Pets e Avaliações":
         avaliacao_app_render(st.session_state.user_data)
-    elif selected_page == "Cadastro de Pet":
+    elif escolha == "Cadastro de Pet":
         cadastro_pet_app_render(st.session_state.user_data)
-    elif selected_page == "Administração":
+    elif escolha == "Administração":
         admin_app_render(st.session_state.user_data)
-    else:
-        st.error("Página não encontrada ou não implementada.")
 
     if st.sidebar.button("Sair"):
         logout(st.session_state)
-        st.session_state.page = "Login" # Redireciona para login
+        st.session_state.page = "Login"
         st.rerun()
 
 else:
     st.session_state.logged_in = False
-    # Menu lateral para usuários não logados
-    st.sidebar.title("Acesso PETDor")
-    selected_option = st.sidebar.radio("Opções", ["Login", "Criar Conta", "Redefinir Senha"], key="logged_out_menu")
 
-    if selected_option == "Login":
+    st.sidebar.title("Acesso PETDor")
+    opcao = st.sidebar.radio("Opções", ["Login", "Criar Conta", "Redefinir Senha"])
+
+    if opcao == "Login":
         login_app_render()
-    elif selected_option == "Criar Conta":
+    elif opcao == "Criar Conta":
         cadastro_app_render()
-    elif selected_option == "Redefinir Senha":
-        st.subheader("Redefinir Senha")
-        email_reset = st.text_input("Digite seu e-mail para resetar a senha:", key="forgot_password_email")
-        if st.button("Enviar link de reset"):
-            if email_reset:
-                sucesso, mensagem = solicitar_reset_senha(email_reset)
+    elif opcao == "Redefinir Senha":
+        st.subheader("Reset de Senha")
+        email = st.text_input("Seu e-mail")
+
+        if st.button("Enviar link"):
+            if email:
+                sucesso, mensagem = solicitar_reset_senha(email)
                 if sucesso:
                     st.success(mensagem)
                 else:
                     st.error(mensagem)
             else:
-                st.error("Por favor, digite um e-mail.")
-    else:
-        # Caso padrão para evitar estado vazio
-        st.session_state.page = "Login"
-        login_app_render()
+                st.error("Digite um e-mail válido.")
