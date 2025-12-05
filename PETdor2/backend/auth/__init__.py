@@ -1,10 +1,12 @@
 # PetDor2/backend/auth/__init__.py
 """
 Módulo de autenticação e gerenciamento de usuários do PETDor.
-Exponha aqui as funções e classes principais dos submódulos.
+Expõe funções principais de criação, validação, segurança e recuperação de acesso.
 """
 
-# Importações relativas dentro do pacote 'auth'
+# -----------------------------
+# Importações de user.py
+# -----------------------------
 from .user import (
     cadastrar_usuario,
     verificar_credenciais,
@@ -15,19 +17,28 @@ from .user import (
     atualizar_status_usuario,
     alterar_senha,
     deletar_usuario,
-    marcar_email_como_confirmado, # Agora é importado de user
+    marcar_email_como_confirmado,
 )
 
+# -----------------------------
+# Importações de password_reset.py
+# -----------------------------
 from .password_reset import (
     solicitar_reset_senha,
     redefinir_senha_com_token,
 )
 
+# -----------------------------
+# Importações de email_confirmation.py
+# -----------------------------
 from .email_confirmation import (
     enviar_email_confirmacao,
     confirmar_email_com_token,
 )
 
+# -----------------------------
+# Importações de security.py
+# -----------------------------
 from .security import (
     hash_password,
     verify_password,
@@ -41,8 +52,11 @@ from .security import (
     logout,
 )
 
-# Define quais funções serão expostas quando alguém fizer 'from auth import ...'
+# -----------------------------
+# Exportação pública do pacote
+# -----------------------------
 __all__ = [
+    # user.py
     "cadastrar_usuario",
     "verificar_credenciais",
     "buscar_usuario_por_id",
@@ -54,12 +68,15 @@ __all__ = [
     "deletar_usuario",
     "marcar_email_como_confirmado",
 
+    # password_reset.py
     "solicitar_reset_senha",
     "redefinir_senha_com_token",
 
+    # email_confirmation.py
     "enviar_email_confirmacao",
     "confirmar_email_com_token",
 
+    # security.py
     "hash_password",
     "verify_password",
     "gerar_token_jwt",
