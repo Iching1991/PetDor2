@@ -119,3 +119,4 @@ def supabase_table_delete(tabela: str, filtros: Dict[str, Any]) -> Tuple[bool, i
 
     except Exception as e:
         return False, 0
+
