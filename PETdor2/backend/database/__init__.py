@@ -1,15 +1,9 @@
 # PetDor2/backend/database/__init__.py
 """
-from .supabase_client import (
-    supabase,
-    testar_conexao,
-    buscar_usuario_por_email,
-    criar_usuario,
-)
+Pacote backend da aplicação PETDor2.
 
-__all__ = [
-    "supabase",
-    "testar_conexao",
-    "buscar_usuario_por_email",
-    "criar_usuario",
-]
+Este arquivo deve permanecer vazio ou minimalista,
+sem importar submódulos, para evitar importações circulares.
+"""
+
+__all__ = []
