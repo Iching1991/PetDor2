@@ -4,7 +4,9 @@ Página de recuperação de senha - solicita reset de senha por e-mail.
 """
 import streamlit as st
 import logging
-from auth.password_reset import solicitar_reset_senha
+
+# 🔧 Import absoluto do backend
+from backend.auth.password_reset import solicitar_reset_senha
 
 logger = logging.getLogger(__name__)
 
@@ -29,13 +31,14 @@ def render():
                 sucesso, mensagem = solicitar_reset_senha(email)
 
             if sucesso:
-                st.success("✅ " + mensagem)
-                st.info("Verifique sua caixa de entrada e o spam.")
+                st.success(f"✅ {mensagem}")
+                st.info("Verifique sua caixa de entrada e a pasta de spam.")
             else:
-                st.error("⚠ Ocorreu um erro ao processar a solicitação. Tente novamente.")
+                st.error(f"⚠ {mensagem}")
 
         except Exception as e:
             logger.error(f"Erro em recuperar_senha: {e}", exc_info=True)
-            st.error("⚠ Erro interno ao processar solicitação. Tente novamente mais tarde.")
+            st.error("⚠ Erro interno ao processar a solicitação. Tente novamente mais tarde.")
+
 
 __all__ = ["render"]
