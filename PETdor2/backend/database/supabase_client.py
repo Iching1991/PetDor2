@@ -1,45 +1,48 @@
 # PETdor2/backend/database/supabase_client.py
+# backend/database/supabase_client.py
+
+from supabase import create_client, Client
 import os
-import logging
-from supabase import create_client, SupabaseClient
-from typing import Any, Dict, Optional, Tuple
+from dotenv import load_dotenv
 
-logger = logging.getLogger(__name__)
+load_dotenv()
 
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-def get_supabase() -> SupabaseClient:
-    url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_KEY")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise ValueError("❌ ERRO: Variáveis SUPABASE_URL e SUPABASE_KEY não foram carregadas.")
 
-    if not url or not key:
-        raise ValueError("SUPABASE_URL ou SUPABASE_KEY não estão definidos no ambiente.")
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    return create_client(url, key)
+# ------------------------------
+# FUNÇÕES DE OPERAÇÃO NO BANCO
+# ------------------------------
 
-
-def testar_conexao() -> Tuple[bool, Optional[str]]:
-    """Testa se a conexão com o Supabase está funcionando."""
+def testar_conexao():
+    """Valida se a conexão está funcionando."""
     try:
-        supabase = get_supabase()
-        response = supabase.from_("test_table").select("*").limit(1).execute()
-        return True, None
+        res = supabase.table("usuarios").select("*").limit(1).execute()
+        return True, "Conexão Supabase OK"
     except Exception as e:
-        logger.error(f"Erro ao testar conexão Supabase: {e}")
         return False, str(e)
 
 
-def supabase_table_select(table: str, query: dict = None) -> Any:
-    """Consulta genérica em uma tabela."""
+def buscar_usuario_por_email(email: str):
+    """Retorna usuário pelo email (corrigido p/ Supabase v2)."""
     try:
-        supabase = get_supabase()
-        q = supabase.from_(table).select("*")
-
-        if query:
-            for field, value in query.items():
-                q = q.eq(field, value)
-
-        response = q.execute()
-        return response.data
-    except Exception as e:
-        logger.error(f"Erro ao consultar tabela {table}: {e}")
+        query = supabase.table("usuarios").select("*").eq("email", email).single().execute()
+        return query.data
+    except Exception:
         return None
+
+
+def criar_usuario(data: dict):
+    """Insere novo usuário na tabela."""
+    try:
+        res = supabase.table("usuarios").insert(data).execute()
+        return res.data
+    except Exception as e:
+        return None
+
+
