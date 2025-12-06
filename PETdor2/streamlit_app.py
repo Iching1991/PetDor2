@@ -2,7 +2,7 @@
 import streamlit as st
 
 # Backend
-from backend.database import testar_conexao
+from backend.database.supabase_client import testar_conexao
 from backend.especies.index import carregar_especies
 from backend.pages.home import render_home
 from backend.pages.avaliacao import render_avaliacao
