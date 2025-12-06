@@ -1,10 +1,5 @@
 """
-Pacote central do backend do PetDor2.
-Disponibiliza submódulos como database, especies, pages e utils.
+Pacote backend da aplicação PETDor2.
+Mantido minimalista para evitar importações circulares.
 """
-
-# Expondo pacotes principais
-from . import database
-from . import especies
-from . import pages
-from . import utils
+__all__ = []
