@@ -1,11 +1,14 @@
 # PETdor2/pages/password_reset.py
 """
 Página de redefinição de senha usando token JWT.
-O usuário recebe um link com token e redefine a senha aqui.
+O usuário recebe um link por e-mail e redefine a senha aqui.
 """
+
 import streamlit as st
 import logging
-from auth.password_reset import validar_token_reset, redefinir_senha_com_token
+
+# 🔧 Imports absolutos do backend
+from backend.auth.password_reset import validar_token_reset, redefinir_senha_com_token
 
 logger = logging.getLogger(__name__)
 
@@ -13,9 +16,8 @@ def render():
     """Renderiza a página de redefinição de senha."""
     st.header("🔐 Redefinir Senha")
 
-    # Obtém token da URL
-    query_params = st.query_params
-    token = query_params.get("token", [None])[0]
+    # Obtém token da URL (compatível Streamlit 1.30+)
+    token = st.query_params.get("token", [None])[0]
 
     if not token:
         st.warning("⚠️ Token de redefinição não fornecido.")
@@ -27,7 +29,8 @@ def render():
         token_valido, dados = validar_token_reset(token)
 
     if not token_valido:
-        st.error(f"❌ {dados.get('erro', 'Token inválido.')}")
+        erro_msg = dados.get("erro", "Token inválido.")
+        st.error(f"❌ {erro_msg}")
         st.info("Solicite um novo link na página de login.")
         return
 
@@ -66,14 +69,14 @@ def render():
         # Redefine senha
         with st.spinner("⏳ Redefinindo senha..."):
             sucesso, mensagem = redefinir_senha_com_token(token, nova_senha)
+            if sucesso:
+                st.success(f"✅ {mensagem}")
+                st.info("🔐 Você já pode fazer login com sua nova senha!")
+                if st.button("🔐 Ir para Login"):
+                    st.session_state.pagina = "login"
+                    st.rerun()
+            else:
+                st.error(f"❌ {mensagem}")
 
-        if sucesso:
-            st.success(mensagem)
-            st.info("🔐 Você já pode fazer login com sua nova senha!")
-            if st.button("🔐 Ir para Login"):
-                st.session_state.pagina = "login"
-                st.rerun()
-        else:
-            st.error(f"❌ {mensagem}")
 
 __all__ = ["render"]
