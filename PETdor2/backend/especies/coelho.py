@@ -1,11 +1,15 @@
-# PETdor_2.0/especies/coelho.py
+# PETdor2/backend/especies/coelho.py
 
 """
 🐇 Configuração de avaliação para COELHOS
 Escala: 0 a 7 — baseada no Rabbit Grimace Scale e parâmetros comportamentais.
 """
 
-from .index import EspecieConfig, Pergunta  # Importação relativa corrigida
+# --------------------------------------------------------------
+# 🚨 IMPORTAÇÃO CORRIGIDA (Antes estava from .index ❌)
+# --------------------------------------------------------------
+from .base import EspecieConfig, Pergunta
+
 
 CONFIG_COELHO = EspecieConfig(
     nome="Coelho",
