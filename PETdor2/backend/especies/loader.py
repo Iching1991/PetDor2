@@ -1,10 +1,15 @@
-# PETdor_2.0/especies/loader.py
+# PETdor2/backend/especies/loader.py
 
 """
 Módulo para carregar e gerenciar dados de espécies.
 """
+# -------------------------------------------------------------------
+# A importação de .index está correta, pois get_especies_nomes reside lá.
+# O importante é garantir que o index.py seja executado (importado)
+# em algum ponto do app para que as espécies sejam registradas.
+# -------------------------------------------------------------------
+from .index import get_especies_nomes
 
-from .index import get_especies_nomes # Importa de especies.index agora!
 
 def listar_especies():
     """
@@ -14,4 +19,7 @@ def listar_especies():
 
 # Exemplo de uso (opcional, para testes)
 if __name__ == "__main__":
+    # Para que este teste funcione, o index.py precisa ter sido executado
+    # e registrado as espécies. Em um ambiente de app, a importação
+    # do pacote backend.especies já cuidaria disso.
     print("Espécies listadas pelo loader:", listar_especies())
