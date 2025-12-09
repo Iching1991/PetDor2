@@ -8,11 +8,10 @@ import logging
 from datetime import datetime
 from typing import Tuple
 
-# Importações absolutas a partir de 'backend'
+# Importações absolutas seguras
 from backend.database.supabase_client import supabase_table_update, supabase_table_select
-from backend.utils.email_sender import enviar_email_confirmacao_generico # Renomeado para evitar conflito
 from .security import gerar_token_confirmacao_email, validar_token_confirmacao_email
-from .user import marcar_email_como_confirmado, buscar_usuario_por_email # Importa a função de user
+from .user import marcar_email_como_confirmado, buscar_usuario_por_email
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +24,10 @@ def enviar_email_confirmacao(email: str, nome: str, user_id: int) -> Tuple[bool,
     """
     Gera token JWT, salva no banco e envia link de confirmação.
     """
+
+    # ⬇️ IMPORT TARDIO — evita import circular com backend.utils
+    from backend.utils.email_sender import enviar_email_confirmacao_generico
+
     try:
         # Gera token JWT
         token = gerar_token_confirmacao_email(email, user_id)
@@ -45,8 +48,7 @@ def enviar_email_confirmacao(email: str, nome: str, user_id: int) -> Tuple[bool,
             logger.error(f"Erro ao salvar token de confirmação para usuário {user_id}")
             return False, "Erro ao gerar link de confirmação."
 
-        # Link de verificação para Streamlit
-        # Assumimos que STREAMLIT_APP_URL está configurado em utils.config
+        # URL do Streamlit para confirmação
         from backend.utils.config import STREAMLIT_APP_URL
         link = f"{STREAMLIT_APP_URL}?action=confirm_email&token={token}"
 
@@ -63,6 +65,7 @@ def enviar_email_confirmacao(email: str, nome: str, user_id: int) -> Tuple[bool,
         </body>
         </html>
         """
+
         mensagem_texto = f"""
         Olá, {nome}!
 
@@ -77,7 +80,7 @@ def enviar_email_confirmacao(email: str, nome: str, user_id: int) -> Tuple[bool,
         Equipe PETDor.
         """
 
-        # Envia e-mail usando a função genérica
+        # Envia e-mail usando a função genérica (importada dentro da função)
         sucesso_email, msg_email = enviar_email_confirmacao_generico(
             destinatario_email=email,
             assunto=assunto,
@@ -95,6 +98,7 @@ def enviar_email_confirmacao(email: str, nome: str, user_id: int) -> Tuple[bool,
     except Exception as e:
         logger.exception(f"Erro ao enviar e-mail de confirmação para {email}")
         return False, f"Erro interno ao enviar e-mail de confirmação: {e}"
+
 
 # ----------------------------------------------
 # 2) Confirmar e-mail com token
@@ -115,16 +119,16 @@ def confirmar_email_com_token(token: str) -> Tuple[bool, str]:
         if not email_do_token or not user_id_do_token:
             return False, "Token de confirmação inválido ou incompleto."
 
-        # Busca o usuário para garantir que o token ainda corresponde
+        # Busca o usuário para garantir que o token corresponde
         ok_user, usuario_db = buscar_usuario_por_email(email_do_token)
         if not ok_user or not usuario_db or usuario_db.get("id") != user_id_do_token:
             return False, "Usuário não encontrado ou token não corresponde."
 
-        # Verifica se o token no banco ainda é o mesmo (evita reuso de tokens antigos)
+        # Verifica se o token atual é o mesmo salvo no banco
         if usuario_db.get("email_confirm_token") != token:
             return False, "Token de confirmação já utilizado ou inválido."
 
-        # Marca o e-mail como confirmado usando a função de auth.user
+        # Marca o e-mail como confirmado
         sucesso_marcar, msg_marcar = marcar_email_como_confirmado(email_do_token)
 
         if sucesso_marcar:
@@ -137,4 +141,3 @@ def confirmar_email_com_token(token: str) -> Tuple[bool, str]:
     except Exception as e:
         logger.exception(f"Erro ao confirmar e-mail com token {token}")
         return False, f"Erro interno ao confirmar e-mail: {e}"
-
