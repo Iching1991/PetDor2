@@ -1,9 +1,15 @@
-# PETdor2/especies/porquinho_da_india.py
+# PETdor2/backend/especies/porquinho_da_india.py
+
 """
 🐹 Configuração de avaliação para PORQUINHOS-DA-ÍNDIA
 Escala: 0 a 7 — baseada em sinais comportamentais e clínicos.
 """
-from .config import EspecieConfig, Pergunta
+
+# --------------------------------------------------------------
+# 🚨 IMPORTAÇÃO CORRIGIDA (Antes estava from .config ❌)
+# --------------------------------------------------------------
+from .base import EspecieConfig, Pergunta
+
 
 CONFIG_PORQUINHO_DA_INDIA = EspecieConfig(
     nome="Porquinho-da-Índia",
