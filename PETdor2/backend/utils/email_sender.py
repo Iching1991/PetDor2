@@ -1,14 +1,14 @@
 # PetDor2/backend/utils/email_sender.py
 
 import smtplib
+import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-import logging
 from typing import Tuple
 
 logger = logging.getLogger(__name__)
 
-# Importa variáveis SMTP do config
+# 🔧 Importa configurações de SMTP
 from backend.utils.config import (
     SMTP_SERVIDOR,
     SMTP_PORTA,
@@ -18,12 +18,26 @@ from backend.utils.config import (
 )
 
 
-def _enviar_email(destinatario: str, assunto: str, texto: str, html: str) -> Tuple[bool, str]:
+# ============================================================
+#   FUNÇÃO INTERNA (NÃO DEVE SER USADA DIRETAMENTE)
+# ============================================================
+
+def _enviar_email(
+    destinatario: str,
+    assunto: str,
+    texto: str,
+    html: str
+) -> Tuple[bool, str]:
     """
-    Função interna responsável por montar e enviar qualquer e-mail.
+    Envia um e-mail com corpo texto e HTML.
+    Essa função é interna e usada pelas funções públicas abaixo.
     """
 
+    if not destinatario:
+        return False, "Endereço de e-mail do destinatário está vazio."
+
     try:
+        # Montagem da mensagem
         msg = MIMEMultipart("alternative")
         msg["From"] = SMTP_EMAIL
         msg["To"] = destinatario
@@ -32,7 +46,7 @@ def _enviar_email(destinatario: str, assunto: str, texto: str, html: str) -> Tup
         msg.attach(MIMEText(texto, "plain"))
         msg.attach(MIMEText(html, "html"))
 
-        # Conexão com SMTP
+        # Conexão SMTP
         if SMTP_USAR_SSL:
             server = smtplib.SMTP_SSL(SMTP_SERVIDOR, SMTP_PORTA)
         else:
@@ -43,43 +57,63 @@ def _enviar_email(destinatario: str, assunto: str, texto: str, html: str) -> Tup
             server.login(SMTP_EMAIL, SMTP_SENHA)
             server.sendmail(SMTP_EMAIL, destinatario, msg.as_string())
 
-        logger.info(f"[EMAIL OK] Enviado para {destinatario} | Assunto: {assunto}")
+        logger.info(f"📧 Email enviado com sucesso → {destinatario} | Assunto: {assunto}")
         return True, "E-mail enviado com sucesso."
 
     except Exception as e:
-        logger.error(f"[EMAIL ERRO] Falha ao enviar para {destinatario}: {e}", exc_info=True)
+        logger.error(f"❌ Erro ao enviar e-mail para {destinatario}: {e}", exc_info=True)
         return False, f"Erro ao enviar e-mail: {e}"
 
 
-# ================================
-#  FUNÇÕES PÚBLICAS
-# ================================
+# ============================================================
+#   FUNÇÕES PÚBLICAS (UTILIZADAS PELO SISTEMA)
+# ============================================================
 
-def enviar_email_confirmacao_generico(destinatario_email: str, assunto: str, corpo_html: str, corpo_texto: str):
+def enviar_email_confirmacao_generico(
+    destinatario_email: str,
+    assunto: str,
+    corpo_html: str,
+    corpo_texto: str
+) -> Tuple[bool, str]:
+    """
+    Função genérica usada para enviar qualquer e-mail de confirmação.
+    """
     return _enviar_email(destinatario_email, assunto, corpo_texto, corpo_html)
 
 
-def enviar_email_recuperacao_senha(destinatario_email: str, link_recuperacao: str):
+def enviar_email_recuperacao_senha(
+    destinatario_email: str,
+    link_recuperacao: str
+) -> Tuple[bool, str]:
     """
-    Implementação REAL que estava faltando!
+    Envia e-mail de recuperação de senha com link personalizado.
     """
 
     assunto = "Recuperação de Senha - PetDor"
 
-    corpo_texto = f"""
-Olá! Você solicitou a recuperação da sua senha.
-
-Para redefinir, clique no link abaixo:
-{link_recuperacao}
-
-Se não foi você, apenas ignore este e-mail.
-    """
+    corpo_texto = (
+        "Olá! Você solicitou a recuperação da sua senha.\n\n"
+        f"Para redefinir, clique no link abaixo:\n{link_recuperacao}\n\n"
+        "Se você não solicitou, apenas ignore este e-mail."
+    )
 
     corpo_html = f"""
-<p>Olá! Você solicitou a recuperação de senha.</p>
-<p>Clique no botão abaixo para redefinir:</p>
-<p><a href="{link_recuperacao}" style="padding:10px 20px;background:#4CAF50;color:white;text-decoration:none;border-radius:6px;">Redefinir Senha</a></p>
-<p>Se não foi você, ignore este e-mail.</p>
-"""
+    <p>Olá! Você solicitou a recuperação da sua senha.</p>
+    <p>Clique no botão abaixo para redefinir:</p>
+    <p>
+        <a href="{link_recuperacao}" 
+           style="padding:10px 20px;background:#4CAF50;color:white;text-decoration:none;
+                  border-radius:6px;font-weight:bold;">
+           Redefinir Senha
+        </a>
+    </p>
+    <p>Se não foi você, ignore este e-mail.</p>
+    """
 
     return _enviar_email(destinatario_email, assunto, corpo_texto, corpo_html)
+
+
+__all__ = [
+    "enviar_email_confirmacao_generico",
+    "enviar_email_recuperacao_senha"
+]
