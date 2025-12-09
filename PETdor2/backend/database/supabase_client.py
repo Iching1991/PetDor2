@@ -1,61 +1,39 @@
-# PETdor2/backend/database/supabase_client.py
-"""
-Cliente Supabase centralizado - usa variáveis de ambiente: SUPABASE_URL, SUPABASE_ANON_KEY
-"""
-import os
-import logging
-from typing import Any, Dict, List, Optional, Tuple, Union
-from supabase import create_client, Client
-from postgrest.base_request_builder import APIResponse # Importar para tipagem de response.data
+  # PETdor2/backend/database/supabase_client.py  import streamlit as st
+  import os
+  from supabase import create_client, Client
 
-logger = logging.getLogger(__name__)
+  def get_supabase() -> Client:
+      try:
+          # Prioriza st.secrets no Streamlit Cloud
+          if "streamlit" in os.environ.get("STREAMLIT_VERSION", ""):
+              supabase_url = st.secrets["supabase"]["SUPABASE_URL"]
+              supabase_key = st.secrets["supabase"]["SUPABASE_KEY"]
+          else:
+              # Fallback para desenvolvimento local com .env
+              supabase_url = os.getenv("SUPABASE_URL")
+              supabase_key = os.getenv("SUPABASE_ANON_KEY")
 
-# Singleton para o cliente Supabase
-_supabase_client: Client | None = None
+          if not supabase_url or not supabase_key:
+              raise RuntimeError("SUPABASE_URL ou SUPABASE_ANON_KEY não configurados. Verifique seu arquivo .env ou as variáveis de ambiente do Streamlit Cloud.")
 
-def get_supabase() -> Client:
-    """Retorna instância singleton do cliente Supabase."""
-    global _supabase_client
-    if _supabase_client is not None:
-        return _supabase_client
+          return create_client(supabase_url, supabase_key)
+      except Exception as e:
+          st.error(f"Erro ao conectar com Supabase: {e}")
+          raise
 
-    url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_ANON_KEY")
+  def testar_conexao():
+      try:
+          client = get_supabase()
+          # Teste simples: lista tabelas ou faz uma query vazia
+          response = client.table("usuarios").select("*").limit(0).execute()
+          st.success("✅ Conexão com Supabase estabelecida com sucesso!")
+          return True
+      except Exception as e:
+          st.error(f"❌ Falha ao testar conexão com Supabase: {e}")
+          return False
 
-    if not url or not key:
-        logger.error("❌ SUPABASE_URL ou SUPABASE_ANON_KEY não configurados.")
-        raise RuntimeError(
-            "SUPABASE_URL ou SUPABASE_ANON_KEY não configurados. "
-            "Verifique seu arquivo .env ou as variáveis de ambiente do Streamlit Cloud."
-        )
-    try:
-        _supabase_client = create_client(url, key)
-        logger.info("✅ Cliente Supabase inicializado com sucesso.")
-        return _supabase_client
-    except Exception as e:
-        logger.error(f"❌ Erro ao inicializar cliente Supabase: {e}", exc_info=True)
-        raise
-
-def testar_conexao() -> bool:
-    """
-    Testa a conexão com o Supabase tentando buscar um registro de uma tabela de teste.
-    Retorna True se a conexão for bem-sucedida, False caso contrário.
-    """
-    try:
-        client = get_supabase()
-        # Tenta buscar um registro de uma tabela que se espera que exista (ex: 'usuarios')
-        # Limita a 1 para ser rápido e não carregar muitos dados.
-        # Não precisa de filtros, apenas verificar se a query não falha.
-        response = client.from_("usuarios").select("id").limit(1).execute()
-        # Se a execução não levantar exceção e a resposta for válida, a conexão está ok.
-        if response.data is not None: # Verifica se a resposta não é None, indicando sucesso
-            logger.info("✅ Conexão com Supabase testada com sucesso.")
-            return True
-        else:
-            logger.warning("⚠️ Conexão com Supabase testada, mas sem dados retornados (tabela 'usuarios' pode estar vazia ou inacessível).")
-            return True # Consideramos sucesso se não houver erro, mesmo que vazia
-    except Exception as e:
-        logger.error(f"❌ Falha ao testar conexão com Supabase: {e}", exc_info=True)
+  # ... resto do código (supabase_table_select, etc.)
+Falha ao testar conexão com Supabase: {e}", exc_info=True)
         return False
 
 def supabase_table_select(
@@ -187,4 +165,5 @@ def supabase_table_delete(
     except Exception as e:
         logger.error(f"Erro na deleção em {tabela}: {e}", exc_info=True)
         return False, 0
+
 
