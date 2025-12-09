@@ -1,39 +1,25 @@
-# PETdor2/especies/base.py
-"""
-Definições base para configuração de espécies e perguntas.
-"""
-from dataclasses import dataclass, asdict
-from typing import List, Optional
+    # PETdor2/especies/base.py
+    from dataclasses import dataclass, field
+    from typing import List, Dict, Any
 
-@dataclass
-class Pergunta:
-    """Representa uma pergunta na avaliação de dor."""
-    texto: str
-    invertida: bool = False
-    peso: float = 1.0
-    escala: str = "0-7"
+    @dataclass
+    class Pergunta:
+        id: str
+        texto: str
+        escala: str # Ex: "0-7", "sim-nao"
+        peso: float = 1.0 # Peso da pergunta na pontuação final
 
-    def to_dict(self) -> dict:
-        """Converte para dicionário."""
-        return asdict(self)
+    @dataclass
+    class EspecieConfig:
+        id: str
+        nome: str
+        perguntas: List[Pergunta]
+        limites_dor: Dict[str, str] = field(default_factory=dict) # Ex: {"0-2": "Baixa", "3-5": "Média", "6-7": "Alta"}
 
-@dataclass
-class EspecieConfig:
-    """Configuração de uma espécie com suas categorias e perguntas."""
-    nome: str
-    especie_id: str
-    descricao: str
-    opcoes_escala: List[str]
-    perguntas: List[Pergunta]
-
-    def to_dict(self) -> dict:
-        """Converte para dicionário compatível com o sistema de registro."""
-        return {
-            "id": self.especie_id,
-            "nome": self.nome,
-            "descricao": self.descricao,
-            "opcoes_escala": self.opcoes_escala,
-            "perguntas": [p.to_dict() for p in self.perguntas],
-        }
-
-__all__ = ["Pergunta", "EspecieConfig"]
+        def to_dict(self):
+            return {
+                "id": self.id,
+                "nome": self.nome,
+                "perguntas": [p.__dict__ for p in self.perguntas],
+                "limites_dor": self.limites_dor
+            }
