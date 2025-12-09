@@ -1,11 +1,12 @@
-# PETdor_2.0/especies/cao.py
-
+# PETdor2/backend/especies/cao.py
 """
 🐕 Configuração de avaliação para CÃES.
 Escala: 0 a 7 (baseada em CBPI e Glasgow Composite Pain Scale).
 """
-
-from .index import EspecieConfig, Pergunta  # Importação relativa correta
+# -------------------------------------------------------------------
+# 🚨 CORREÇÃO AQUI: Importar de .base, não de .index
+# -------------------------------------------------------------------
+from .base import EspecieConfig, Pergunta
 
 CONFIG_CAES = EspecieConfig(
     nome="Cachorro",
