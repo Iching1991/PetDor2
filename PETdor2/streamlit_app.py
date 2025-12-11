@@ -22,7 +22,8 @@ if PROJECT_ROOT not in sys.path:
 # ===============================
 # Importações absolutas a partir do pacote 'backend'
 # ===============================
-from backend.database import testar_conexao # Importa do pacote database
+# /mount/src/petdor2/PETdor2/streamlit_app.py
+from backend.database.supabase_client import testar_conexao # Importa diretamente do módulo
 from backend.auth.user import (
     cadastrar_usuario,
     verificar_credenciais,
