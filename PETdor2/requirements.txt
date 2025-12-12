@@ -1,10 +1,7 @@
-streamlit==1.29.0
-python-dotenv==1.0.1
+streamlit==1.28.0
+python-dotenv==1.0.0
+bcrypt==4.1.0
+pyjwt>=2.8.0,<3.0.0
 requests==2.31.0
-bcrypt==4.1.2
-cryptography==41.0.7
-pyjwt==2.8.0
+supabase>=2.10.0  # <--- ATUALIZADO (era 2.4.0)
 python-telegram-bot==20.3
-aiohttp==3.9.1
-supabase==2.4.0 
-pandas==2.3.3     # <--- ADICIONADO, pois é uma dependência comum e pode ser necessária
