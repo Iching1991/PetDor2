@@ -34,8 +34,9 @@ def render():
     ---
 
     ## 👥 Criador
-    **Agnaldo Angelico Baldissera**  
+    **Agnaldo Angelico Baldissera/Salute Vitae AI**  
     Desenvolvedor e idealizador do PETDor.
+    
 
     ---
 
