@@ -25,8 +25,14 @@ st.set_page_config(
     layout="wide"
 )
 
-# Teste opcional de conexão
-testar_conexao()
+# Teste manual de conexão (aparece na UI)
+import streamlit as st
+from backend.database import testar_conexao
+
+st.sidebar.write("🔧 Testes do sistema")
+if st.sidebar.button("Testar conexão com Supabase"):
+    testar_conexao()
+
 
 
 # ----------------------------
