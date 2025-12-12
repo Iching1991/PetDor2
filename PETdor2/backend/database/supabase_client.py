@@ -2,54 +2,58 @@
 
 import os
 import streamlit as st
-from typing import Any, Dict, List, Optional, Tuple, Union
+from supabase import create_client, Client
+from typing import Any, Dict, List, Optional, Tuple
+import logging
 
-from supabase import create_client
-from supabase.lib.client import APIResponse
+logger = logging.getLogger(__name__)
 
 
-# --------------------------------------------------------
-# Criar cliente Supabase
-# --------------------------------------------------------
-def get_supabase():
+# -----------------------------------
+# 1 — Criar cliente Supabase
+# -----------------------------------
+def get_supabase() -> Client:
     try:
+        # Streamlit Cloud usa secrets
         if "streamlit" in os.environ.get("STREAMLIT_VERSION", ""):
             supabase_url = st.secrets["supabase"]["SUPABASE_URL"]
             supabase_key = st.secrets["supabase"]["SUPABASE_KEY"]
         else:
+            # Local usa .env
             supabase_url = os.getenv("SUPABASE_URL")
             supabase_key = os.getenv("SUPABASE_ANON_KEY")
 
         if not supabase_url or not supabase_key:
             raise RuntimeError(
-                "SUPABASE_URL/SUPABASE_ANON_KEY ausentes. "
-                "Verifique .env ou secrets.toml."
+                "SUPABASE_URL ou SUPABASE_ANON_KEY não configurados."
             )
 
         return create_client(supabase_url, supabase_key)
 
     except Exception as e:
-        st.error(f"❌ Erro ao conectar ao Supabase: {e}")
+        st.error(f"Erro ao conectar com Supabase: {e}")
         raise
 
 
-# --------------------------------------------------------
-# Testar conexão
-# --------------------------------------------------------
-def testar_conexao():
+# -----------------------------------
+# 2 — Função de teste de conexão
+# -----------------------------------
+def testar_conexao() -> bool:
     try:
         client = get_supabase()
         client.table("usuarios").select("*").limit(1).execute()
-        st.success("✅ Conexão com Supabase OK!")
+
+        st.success("✅ Conexão com Supabase OK")
         return True
+
     except Exception as e:
         st.error(f"❌ Falha ao testar conexão: {e}")
         return False
 
 
-# --------------------------------------------------------
-# SELECT Genérico
-# --------------------------------------------------------
+# -----------------------------------
+# 3 — SELECT genérico
+# -----------------------------------
 def supabase_table_select(
     tabela: str,
     colunas: str = "*",
@@ -57,15 +61,14 @@ def supabase_table_select(
     order_by: Optional[str] = None,
     desc: bool = False,
     single: bool = False
-):
+) -> Tuple[bool, Any]:
     try:
         client = get_supabase()
-
-        query = client.from_(tabela).select(colunas)
+        query = client.table(tabela).select(colunas)
 
         if filtros:
-            for c, v in filtros.items():
-                query = query.eq(c, v)
+            for coluna, valor in filtros.items():
+                query = query.eq(coluna, valor)
 
         if order_by:
             query = query.order(order_by, desc=desc)
@@ -73,59 +76,78 @@ def supabase_table_select(
         if single:
             query = query.single()
 
-        resp: APIResponse = query.execute()
+        response = query.execute()
 
-        if resp.data is None:
-            return True, {} if single else []
-
-        return True, resp.data
+        return True, response.data
 
     except Exception as e:
-        return False, f"Erro SELECT em {tabela}: {e}"
+        logger.error(f"Erro no SELECT em '{tabela}': {e}")
+        return False, str(e)
 
 
-# --------------------------------------------------------
-# INSERT
-# --------------------------------------------------------
-def supabase_table_insert(tabela: str, dados: Dict[str, Any]):
+# -----------------------------------
+# 4 — INSERT genérico
+# -----------------------------------
+def supabase_table_insert(
+    tabela: str,
+    dados: Dict[str, Any]
+) -> Tuple[bool, Any]:
+
     try:
         client = get_supabase()
-        resp: APIResponse = client.from_(tabela).insert(dados).execute()
-        return True, resp.data
+        response = client.table(tabela).insert(dados).execute()
+
+        return True, response.data
+
     except Exception as e:
-        return False, f"Erro INSERT em {tabela}: {e}"
+        logger.error(f"Erro INSERT em '{tabela}': {e}")
+        return False, str(e)
 
 
-# --------------------------------------------------------
-# UPDATE
-# --------------------------------------------------------
-def supabase_table_update(tabela: str, dados: Dict[str, Any], filtros: Dict[str, Any]):
+# -----------------------------------
+# 5 — UPDATE genérico
+# -----------------------------------
+def supabase_table_update(
+    tabela: str,
+    dados_update: Dict[str, Any],
+    filtros: Dict[str, Any]
+) -> Tuple[bool, Any]:
+
     try:
         client = get_supabase()
-        query = client.from_(tabela).update(dados)
+        query = client.table(tabela).update(dados_update)
 
-        for c, v in filtros.items():
-            query = query.eq(c, v)
+        for coluna, valor in filtros.items():
+            query = query.eq(coluna, valor)
 
-        resp = query.execute()
-        return True, resp.data
+        response = query.execute()
+        return True, response.data
+
     except Exception as e:
-        return False, f"Erro UPDATE em {tabela}: {e}"
+        logger.error(f"Erro UPDATE em '{tabela}': {e}")
+        return False, str(e)
 
 
-# --------------------------------------------------------
-# DELETE
-# --------------------------------------------------------
-def supabase_table_delete(tabela: str, filtros: Dict[str, Any]):
+# -----------------------------------
+# 6 — DELETE genérico
+# -----------------------------------
+def supabase_table_delete(
+    tabela: str,
+    filtros: Dict[str, Any]
+) -> Tuple[bool, int]:
+
     try:
         client = get_supabase()
-        query = client.from_(tabela).delete()
+        query = client.table(tabela).delete()
 
-        for c, v in filtros.items():
-            query = query.eq(c, v)
+        for coluna, valor in filtros.items():
+            query = query.eq(coluna, valor)
 
-        resp = query.execute()
-        qtd = len(resp.data) if resp.data else 0
-        return True, qtd
+        response = query.execute()
+
+        deletados = len(response.data) if response.data else 0
+        return True, deletados
+
     except Exception as e:
-        return False, f"Erro DELETE em {tabela}: {e}"
+        logger.error(f"Erro DELETE em '{tabela}': {e}")
+        return False, 0
