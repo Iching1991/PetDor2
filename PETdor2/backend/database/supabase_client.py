@@ -1,15 +1,22 @@
 # backend/database/supabase_client.py
-
 import os
-import streamlit as st
-from supabase import create_client, Client
-from typing import Any, Dict, List, Tuple, Optional
+from supabase import create_client
+from dotenv import load_dotenv
 
-# Tentativa de importação segura
-try:
-    from supabase.lib.client import APIResponse
-except Exception:
-    APIResponse = Any
+load_dotenv()
+
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_ANON_KEY")
+
+def conectar_supabase():
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        print("✅ Conectado ao Supabase com sucesso!")
+        return supabase
+
+    except Exception as e:
+        print(f"❌ Erro ao conectar ao Supabase: {e}")
+        return None
 
 
 # =====================================================
@@ -129,3 +136,4 @@ def supabase_table_delete(tabela: str, filtros: Dict[str, Any]):
 
     except Exception as e:
         return False, f"Erro no DELETE: {e}"
+
