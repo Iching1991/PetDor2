@@ -6,5 +6,5 @@ cryptography==41.0.7
 pyjwt==2.8.0
 python-telegram-bot==20.3
 aiohttp==3.9.1
-supabase==2.4.0  # <--- ATUALIZADO PARA A VERSÃO 2.4.0
+supabase==1.0.3
 pandas==2.3.3     # <--- ADICIONADO, pois é uma dependência comum e pode ser necessária
