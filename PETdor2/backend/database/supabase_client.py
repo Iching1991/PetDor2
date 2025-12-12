@@ -3,49 +3,42 @@
 import os
 import streamlit as st
 from supabase import create_client, Client
+from typing import Any, Dict, Optional, Tuple
 from dotenv import load_dotenv
-from typing import Optional, Dict, Any, Tuple
 
 load_dotenv()
 
-# =====================================================
-# Carregar credenciais
-# =====================================================
-def carregar_credenciais():
-    # Prioridade: secrets.toml
-    if "supabase" in st.secrets:
-        url = st.secrets["supabase"].get("SUPABASE_URL")
-        key = st.secrets["supabase"].get("SUPABASE_KEY")
-
-        if url and key:
-            return url, key
-
-    # Fallback: .env
-    url = os.getenv("SUPABASE_URL")
-    key = os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_ANON_KEY")
-
-    return url, key
-
-
-# =====================================================
-# Criar cliente Supabase
-# =====================================================
+# ======================================================================
+# 🔌 Criar cliente Supabase corretamente (versão 2.x)
+# ======================================================================
 def get_supabase() -> Client:
-    url, key = carregar_credenciais()
-
-    if not url or not key:
-        raise RuntimeError("Variáveis do Supabase não configuradas.")
-
     try:
-        client = create_client(url, key)  # ✔️ sem proxy, sem parâmetros extras
+        # 1️⃣ STREAMLIT SECRETS (PRIORIDADE)
+        if "supabase" in st.secrets:
+            supabase_url = st.secrets["supabase"].get("SUPABASE_URL")
+            supabase_key = st.secrets["supabase"].get("SUPABASE_KEY") or \
+                           st.secrets["supabase"].get("SUPABASE_ANON_KEY")
+        else:
+            # 2️⃣ .ENV LOCAL (fallback)
+            supabase_url = os.getenv("SUPABASE_URL")
+            supabase_key = os.getenv("SUPABASE_ANON_KEY")
+
+        if not supabase_url or not supabase_key:
+            raise RuntimeError("Variáveis do Supabase não configuradas.")
+
+        # ✔️ Versão correta — NADA de parâmetros adicionais
+        client = create_client(supabase_url, supabase_key)
+
         return client
+
     except Exception as e:
-        raise RuntimeError(f"Erro ao criar cliente Supabase: {e}")
+        st.error(f"❌ Erro ao conectar ao Supabase: {e}")
+        raise
 
 
-# =====================================================
-# Testar conexão
-# =====================================================
+# ======================================================================
+# 🔍 Testar conexão
+# ======================================================================
 def testar_conexao() -> bool:
     try:
         client = get_supabase()
@@ -56,9 +49,9 @@ def testar_conexao() -> bool:
         return False
 
 
-# =====================================================
-# SELECT
-# =====================================================
+# ======================================================================
+# 📌 SELECT
+# ======================================================================
 def supabase_table_select(
     tabela: str,
     colunas: str = "*",
@@ -67,6 +60,7 @@ def supabase_table_select(
     desc: bool = False,
     single: bool = False
 ) -> Tuple[bool, Any]:
+
     try:
         client = get_supabase()
         query = client.table(tabela).select(colunas)
@@ -88,9 +82,9 @@ def supabase_table_select(
         return False, f"Erro no SELECT: {e}"
 
 
-# =====================================================
-# INSERT
-# =====================================================
+# ======================================================================
+# ➕ INSERT
+# ======================================================================
 def supabase_table_insert(tabela: str, dados: Dict[str, Any]):
     try:
         client = get_supabase()
@@ -100,9 +94,9 @@ def supabase_table_insert(tabela: str, dados: Dict[str, Any]):
         return False, f"Erro no INSERT: {e}"
 
 
-# =====================================================
-# UPDATE
-# =====================================================
+# ======================================================================
+# ✏ UPDATE
+# ======================================================================
 def supabase_table_update(tabela: str, dados_update: Dict[str, Any], filtros: Dict[str, Any]):
     try:
         client = get_supabase()
@@ -118,9 +112,9 @@ def supabase_table_update(tabela: str, dados_update: Dict[str, Any], filtros: Di
         return False, f"Erro no UPDATE: {e}"
 
 
-# =====================================================
-# DELETE
-# =====================================================
+# ======================================================================
+# ❌ DELETE
+# ======================================================================
 def supabase_table_delete(tabela: str, filtros: Dict[str, Any]):
     try:
         client = get_supabase()
