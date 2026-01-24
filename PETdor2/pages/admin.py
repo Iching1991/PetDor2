@@ -1,14 +1,6 @@
-import streamlit as st
-st.write("Admin page iniciou")
-
-from backend.auth.user import criar_usuario
-
-st.write("Auth import OK")
-
-# PetDor2/pages/admin.py
 """
 Página administrativa - gerenciamento de usuários e sistema.
-Apenas usuários com role 'admin' podem acessar.
+Apenas usuários com is_admin = true podem acessar.
 """
 
 import streamlit as st
@@ -17,14 +9,14 @@ import logging
 from datetime import datetime
 
 # ============================================================
-# 🔧 IMPORTS ABSOLUTOS
+# 🔧 IMPORTS DO BACKEND
 # ============================================================
-from backend.database.supabase_client import (
+from backend.database import (
     supabase_table_select,
     supabase_table_update,
 )
+
 from backend.auth.user import (
-    atualizar_status_usuario,
     atualizar_usuario,
 )
 
@@ -42,38 +34,26 @@ def is_admin(user_data: dict) -> bool:
 # ============================================================
 
 def listar_usuarios() -> list:
-    ok, data = supabase_table_select(
-        "usuarios",
-        "id, nome, email, tipo, pais, email_confirmado, ativo, is_admin, criado_em"
+    data = supabase_table_select(
+        table="usuarios",
+        select="id, nome, email, tipo_usuario, pais, email_confirmado, ativo, is_admin, criado_em"
     )
-    if not ok:
-        st.error(data)
-        logger.error(data)
-        return []
     return data or []
 
 
-def listar_pets() -> list:
-    ok, data = supabase_table_select(
-        "pets",
-        "id, nome, especie, raca, proprietario_id, criado_em"
+def listar_animais() -> list:
+    data = supabase_table_select(
+        table="animais",
+        select="id, nome, especie, raca, tutor_id, ativo, criado_em"
     )
-    if not ok:
-        st.error(data)
-        logger.error(data)
-        return []
     return data or []
 
 
 def listar_avaliacoes() -> list:
-    ok, data = supabase_table_select(
-        "avaliacoes",
-        "id, usuario_id, pet_id, percentual_dor, data_avaliacao"
+    data = supabase_table_select(
+        table="avaliacoes_dor",
+        select="id, animal_id, avaliador_id, pontuacao_percentual, nivel_dor, criado_em"
     )
-    if not ok:
-        st.error(data)
-        logger.error(data)
-        return []
     return data or []
 
 # ============================================================
@@ -92,7 +72,7 @@ def render(user_data: dict = None):
 
     tab1, tab2, tab3, tab4 = st.tabs([
         "👥 Usuários",
-        "🐾 Pets",
+        "🐾 Animais",
         "📊 Avaliações",
         "⚙️ Sistema"
     ])
@@ -124,61 +104,71 @@ def render(user_data: dict = None):
 
                 with col2:
                     novo_tipo = st.selectbox(
-                        "Tipo",
-                        ["Tutor", "Veterinario", "Admin"],
-                        index=0,
+                        "Tipo de usuário",
+                        ["tutor", "veterinario", "clinica", "admin"],
+                        index=["tutor", "veterinario", "clinica", "admin"].index(
+                            u.get("tipo_usuario", "tutor")
+                        ),
                         key=f"tipo_{uid}"
                     )
+
                     novo_admin = st.checkbox(
                         "Administrador",
                         value=u["is_admin"],
                         key=f"admin_{uid}"
                     )
 
-                    if st.button("💾 Salvar", key=f"save_{uid}"):
-                        ok, msg = atualizar_usuario(
+                    if st.button("💾 Salvar alterações", key=f"save_{uid}"):
+                        ok = atualizar_usuario(
                             uid,
-                            tipo=novo_tipo,
-                            is_admin=novo_admin
+                            {
+                                "tipo_usuario": novo_tipo,
+                                "is_admin": novo_admin
+                            }
                         )
                         if ok:
-                            st.success("Atualizado!")
+                            st.success("Usuário atualizado com sucesso.")
                             st.rerun()
                         else:
-                            st.error(msg)
+                            st.error("Erro ao atualizar usuário.")
 
                 with col3:
                     label = "🔒 Desativar" if u["ativo"] else "🔓 Ativar"
                     if st.button(label, key=f"status_{uid}"):
-                        ok, msg = atualizar_status_usuario(uid, not u["ativo"])
+                        ok = atualizar_usuario(uid, {"ativo": not u["ativo"]})
                         if ok:
-                            st.success("Status atualizado!")
+                            st.success("Status atualizado.")
                             st.rerun()
                         else:
-                            st.error(msg)
+                            st.error("Erro ao atualizar status.")
 
     # ========================================================
-    # 🐾 PETS
+    # 🐾 ANIMAIS
     # ========================================================
     with tab2:
-        pets = listar_pets()
-        if not pets:
-            st.info("Nenhum pet cadastrado.")
+        animais = listar_animais()
+
+        if not animais:
+            st.info("Nenhum animal cadastrado.")
         else:
-            st.metric("Total de Pets", len(pets))
-            st.dataframe(pd.DataFrame(pets), use_container_width=True)
+            st.metric("Total de Animais", len(animais))
+            st.dataframe(pd.DataFrame(animais), use_container_width=True)
 
     # ========================================================
     # 📊 AVALIAÇÕES
     # ========================================================
     with tab3:
         avaliacoes = listar_avaliacoes()
+
         if not avaliacoes:
             st.info("Nenhuma avaliação registrada.")
         else:
             df = pd.DataFrame(avaliacoes)
-            st.metric("Total", len(df))
-            st.metric("Dor Média", f"{df['percentual_dor'].mean():.1f}%")
+            st.metric("Total de Avaliações", len(df))
+            st.metric(
+                "Dor Média",
+                f"{df['pontuacao_percentual'].mean():.1f}%"
+            )
             st.dataframe(df, use_container_width=True)
 
     # ========================================================
@@ -187,9 +177,16 @@ def render(user_data: dict = None):
     with tab4:
         st.info("📦 **PETdor 2.0**")
         st.info(f"🕒 {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
-        if st.button("🔄 Testar Conexão Supabase"):
-            st.success("Conexão ativa ✅")
+
+        if st.button("🔄 Testar conexão com Supabase"):
+            try:
+                teste = supabase_table_select("usuarios", limit=1)
+                if teste is not None:
+                    st.success("Conexão ativa ✅")
+                else:
+                    st.error("Falha na conexão ❌")
+            except Exception as e:
+                st.error(f"Erro: {e}")
 
 
 __all__ = ["render"]
-
