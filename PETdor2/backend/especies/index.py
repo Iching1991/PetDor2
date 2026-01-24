@@ -1,10 +1,12 @@
 """
-Sistema central de registro e consulta das espécies e suas configurações.
-Compatível com MODELO COMPLETO (categorias + perguntas).
+Sistema central de registro e consulta das espécies.
+Modelo COMPLETO (categorias + perguntas).
 """
 
 import logging
 from typing import Dict, List, Optional, Union
+from importlib import import_module
+
 from .base import EspecieConfig, Categoria, Pergunta
 
 logger = logging.getLogger(__name__)
@@ -12,17 +14,14 @@ logger = logging.getLogger(__name__)
 # ==========================================================
 # Registro interno
 # ==========================================================
+
 _ESPECIES_REGISTRADAS: Dict[str, dict] = {}
 
 # ==========================================================
-# Funções de registro e busca
+# Registro e consulta
 # ==========================================================
 
 def registrar_especie(config: Union[EspecieConfig, dict]) -> None:
-    """
-    Registra a configuração de uma espécie.
-    Aceita EspecieConfig (dataclass) ou dict já normalizado.
-    """
     if isinstance(config, EspecieConfig):
         config = config.to_dict()
 
@@ -44,22 +43,18 @@ def registrar_especie(config: Union[EspecieConfig, dict]) -> None:
 
 
 def buscar_especie_por_id(especie_id: str) -> Optional[dict]:
-    """Retorna a configuração completa da espécie."""
     return _ESPECIES_REGISTRADAS.get(especie_id)
 
 
 def listar_especies() -> List[dict]:
-    """Lista todas as espécies registradas."""
     return list(_ESPECIES_REGISTRADAS.values())
 
 
 def get_especies_nomes() -> List[str]:
-    """Retorna somente os nomes das espécies registradas."""
     return [config["nome"] for config in _ESPECIES_REGISTRADAS.values()]
 
 
 def get_especies_ids() -> List[str]:
-    """Retorna somente os IDs das espécies registradas."""
     return list(_ESPECIES_REGISTRADAS.keys())
 
 
@@ -68,34 +63,23 @@ def get_especies_ids() -> List[str]:
 # ==========================================================
 
 def get_escala_labels(escala: str) -> List[str]:
-    """
-    Retorna os labels de uma escala.
-    Exemplo:
-        "0-7" → ["0", "1", ..., "7"]
-        "sim-nao" → ["Não", "Sim"]
-    """
     escala = escala.lower().strip()
 
     if escala == "sim-nao":
         return ["Não", "Sim"]
 
     if "-" in escala:
-        try:
-            inicio, fim = escala.split("-")
-            return [str(i) for i in range(int(inicio), int(fim) + 1)]
-        except ValueError:
-            logger.error(f"Escala inválida: {escala}")
-            raise ValueError(f"Escala inválida: {escala}")
+        inicio, fim = escala.split("-")
+        return [str(i) for i in range(int(inicio), int(fim) + 1)]
 
     raise ValueError(f"Escala desconhecida: {escala}")
 
 
 # ==========================================================
-# Função para Streamlit
+# Streamlit helper
 # ==========================================================
 
 def carregar_especies() -> List[dict]:
-    """Retorna todas as espécies registradas (para UI)."""
     return listar_especies()
 
 
@@ -112,10 +96,10 @@ ESPECIES_IMPORTS = {
     "repteis": "CONFIG_REPTEIS",
 }
 
-for modulo, config_attr in ESPECIES_IMPORTS.items():
+for modulo, attr in ESPECIES_IMPORTS.items():
     try:
-        mod = __import__(f".{modulo}", globals(), locals(), [config_attr])
-        registrar_especie(getattr(mod, config_attr))
+        mod = import_module(f"backend.especies.{modulo}")
+        registrar_especie(getattr(mod, attr))
     except Exception as e:
         logger.error(f"❌ Erro ao registrar espécie '{modulo}': {e}")
 
