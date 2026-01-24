@@ -1,13 +1,12 @@
 """
 Página de Avaliação de Dor - PETDor2
-Usuário (tutor) avalia a dor do seu animal.
+Modelo completo com categorias
 Compatível com Supabase REST + RLS + Triggers
 """
 
 import streamlit as st
-import json
 import logging
-from typing import List, Dict, Any
+from typing import Dict, Any, List
 
 # ============================================================
 # 🔧 IMPORTS CORRETOS (SEM get_supabase)
@@ -23,7 +22,6 @@ from backend.especies.index import (
 
 logger = logging.getLogger(__name__)
 
-
 # ============================================================
 # 🐾 Carregar animais do tutor
 # ============================================================
@@ -34,15 +32,14 @@ def carregar_animais_do_tutor(tutor_id: str) -> List[Dict[str, Any]]:
             table="animais",
             filters={
                 "tutor_id": tutor_id,
-                "ativo": True
+                "ativo": True,
             },
-            order="nome.asc"
+            order="nome.asc",
         ) or []
     except Exception as e:
         logger.error(f"Erro ao carregar animais: {e}", exc_info=True)
         st.error("Erro ao carregar seus animais.")
         return []
-
 
 # ============================================================
 # 💾 Salvar avaliação
@@ -52,7 +49,7 @@ def salvar_avaliacao(
     animal_id: str,
     avaliador_id: str,
     respostas: Dict[str, Any],
-    pontuacao_total: int
+    pontuacao_total: int,
 ) -> bool:
     try:
         result = supabase_table_insert(
@@ -63,13 +60,12 @@ def salvar_avaliacao(
                 "respostas": respostas,
                 "pontuacao_total": pontuacao_total,
                 "nivel_dor": str(pontuacao_total),
-            }
+            },
         )
         return result is not None
     except Exception as e:
         logger.error(f"Erro ao salvar avaliação: {e}", exc_info=True)
         return False
-
 
 # ============================================================
 # 🖥️ Render da página
@@ -100,16 +96,16 @@ def render():
     animal = st.selectbox(
         "Selecione o animal",
         animais,
-        format_func=lambda a: f"{a['nome']} ({a['especie']})"
+        format_func=lambda a: f"{a['nome']} ({a['especie']})",
     )
 
     especie_cfg = buscar_especie_por_id(animal["especie"])
     if not especie_cfg:
-        st.error("Espécie sem escala configurada.")
+        st.error("Espécie sem configuração.")
         return
 
     # --------------------------------------------------------
-    # 📋 Questionário
+    # 📋 Questionário por categoria
     # --------------------------------------------------------
     st.subheader(f"🧪 Avaliação para {animal['nome']}")
 
@@ -117,17 +113,18 @@ def render():
     pontuacao_total = 0
 
     for categoria in especie_cfg.get("categorias", []):
-        st.markdown(f"### {categoria['nome']}")
+        st.markdown(f"### 🔹 {categoria['nome']}")
 
         for pergunta in categoria.get("perguntas", []):
             labels = get_escala_labels(pergunta["escala"])
+
             escolha = st.radio(
                 pergunta["texto"],
                 labels,
-                key=f"{categoria['nome']}_{pergunta['texto']}"
+                key=pergunta["id"],
             )
 
-            respostas[pergunta["texto"]] = escolha
+            respostas[pergunta["id"]] = escolha
 
             try:
                 pontuacao_total += labels.index(escolha)
@@ -136,7 +133,7 @@ def render():
 
         st.divider()
 
-    st.markdown(f"## 🧮 Pontuação total: **{pontuacao_total}**")
+    st.metric("Pontuação Total", pontuacao_total)
 
     # --------------------------------------------------------
     # 💾 Salvar
@@ -146,7 +143,7 @@ def render():
             animal_id=animal["id"],
             avaliador_id=tutor_id,
             respostas=respostas,
-            pontuacao_total=pontuacao_total
+            pontuacao_total=pontuacao_total,
         )
 
         if sucesso:
@@ -154,6 +151,5 @@ def render():
             st.rerun()
         else:
             st.error("Erro ao salvar avaliação.")
-
 
 __all__ = ["render"]
