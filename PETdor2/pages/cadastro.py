@@ -1,15 +1,23 @@
 """
 Página de cadastro de usuários - PETDor2
-Permite criar uma nova conta no sistema.
+Criação de conta inicial (Tutor / Veterinário / Clínica)
 """
 
 import streamlit as st
+import hashlib
 
-# 🔧 Import absoluto do backend
-from backend.auth.user import cadastrar_usuario
+from backend.auth.user import criar_usuario
+
+
+def hash_senha(senha: str) -> str:
+    """
+    Gera hash simples da senha.
+    (Pode ser trocado por bcrypt/argon2 no futuro)
+    """
+    return hashlib.sha256(senha.encode("utf-8")).hexdigest()
+
 
 def render():
-    """Renderiza a página de cadastro de usuário."""
     st.title("📝 Criar Conta")
     st.markdown("Preencha os dados abaixo para criar sua conta no PETDor.")
 
@@ -27,7 +35,11 @@ def render():
     # Botão de cadastro
     # -----------------------------
     if st.button("Criar Conta"):
-        # Validação simples
+        # Validações básicas
+        if not nome or not email or not senha:
+            st.error("❌ Preencha todos os campos obrigatórios.")
+            return
+
         if senha != confirmar:
             st.error("❌ As senhas não coincidem.")
             return
@@ -36,15 +48,29 @@ def render():
             st.error("❌ A senha deve ter pelo menos 6 caracteres.")
             return
 
-        ok, msg = cadastrar_usuario(nome, email, senha, tipo, pais)
+        dados_usuario = {
+            "nome": nome.strip(),
+            "email": email.strip().lower(),
+            "senha_hash": hash_senha(senha),
+            "tipo_usuario": tipo.lower(),   # tutor | veterinario | clinica
+            "pais": pais,
+            "email_confirmado": False,
+            "ativo": True,
+            "is_admin": False,
+        }
 
-        if ok:
-            st.success("✅ " + msg)
-            st.info("📧 Verifique seu e-mail para confirmar sua conta.")
-            st.session_state.pagina = "login"
-            st.rerun()
-        else:
-            st.error("❌ " + msg)
+        try:
+            resultado = criar_usuario(dados_usuario)
+
+            if resultado:
+                st.success("✅ Conta criada com sucesso!")
+                st.info("📧 Verifique seu e-mail para confirmar sua conta.")
+                st.session_state.pagina = "login"
+                st.rerun()
+            else:
+                st.error("❌ Não foi possível criar a conta. Verifique os dados.")
+        except Exception as e:
+            st.error(f"❌ Erro ao criar conta: {e}")
 
     # -----------------------------
     # Observações
@@ -57,5 +83,6 @@ def render():
         - O país é apenas informativo por enquanto.  
         """
     )
+
 
 __all__ = ["render"]
