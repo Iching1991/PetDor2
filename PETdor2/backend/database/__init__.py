@@ -1,7 +1,8 @@
 # backend/database/__init__.py
 
 from .supabase_client import (
-    get_supabase,
+    get_supabase_client,
+    get_headers_with_jwt,
     testar_conexao,
     supabase_table_select,
     supabase_table_insert,
@@ -10,7 +11,8 @@ from .supabase_client import (
 )
 
 __all__ = [
-    "get_supabase",
+    "get_supabase_client",
+    "get_headers_with_jwt",
     "testar_conexao",
     "supabase_table_select",
     "supabase_table_insert",
