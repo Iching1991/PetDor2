@@ -6,133 +6,116 @@ Permite atualizar dados pessoais, redefinir senha e gerenciar preferências.
 
 import streamlit as st
 import logging
+from typing import Dict, Any
 
-# 🔧 Imports absolutos
-from backend.auth.user import (
-    buscar_usuario_por_email,
-    redefinir_senha,
-    atualizar_status_usuario,
+from backend.database import (
+    supabase_table_update,
 )
-from backend.database.supabase_client import get_supabase
 
 logger = logging.getLogger(__name__)
 
 # ==========================================================
-# Funções de banco
+# Atualizar dados do usuário
 # ==========================================================
-def atualizar_dados_usuario(user_id: int, nome: str, email: str) -> bool:
-    """Atualiza nome e email do usuário no Supabase."""
+
+def atualizar_dados_usuario(
+    usuario_id: str,
+    nome: str,
+    email: str,
+) -> bool:
     try:
-        supabase = get_supabase()
-        supabase.from_("usuarios").update({
-            "nome": nome,
-            "email": email.lower()
-        }).eq("id", user_id).execute()
-        logger.info(f"✅ Dados do usuário {user_id} atualizados")
-        return True
+        atualizado = supabase_table_update(
+            table="usuarios",
+            filters={"id": usuario_id},
+            data={
+                "nome": nome.strip(),
+                "email": email.strip().lower(),
+            },
+        )
+        return atualizado is not None
     except Exception as e:
-        logger.error(f"Erro ao atualizar dados: {e}")
+        logger.error("Erro ao atualizar dados do usuário", exc_info=True)
         return False
+
 
 # ==========================================================
 # Renderização
 # ==========================================================
+
 def render():
     st.header("👤 Minha Conta")
-    usuario = st.session_state.get("usuario")
 
+    # ------------------------------------------------------
+    # Usuário logado
+    # ------------------------------------------------------
+    usuario: Dict[str, Any] = st.session_state.get("user_data")
     if not usuario:
         st.warning("⚠️ Você precisa estar logado para acessar esta página.")
         st.stop()
 
-    usuario_id = usuario.get("id")
-    nome_atual = usuario.get("nome", "")
-    email_atual = usuario.get("email", "")
-    tipo_usuario = usuario.get("tipo", "Tutor")
-
-    # Abas
-    tab1, tab2, tab3 = st.tabs(["📋 Dados Pessoais", "🔐 Segurança", "⚙️ Preferências"])
+    usuario_id = usuario["id"]
 
     # ------------------------------------------------------
-    # ABA 1: Dados Pessoais
+    # Abas
+    # ------------------------------------------------------
+    tab1, tab2 = st.tabs(["📋 Dados Pessoais", "⚙️ Conta"])
+
+    # ------------------------------------------------------
+    # ABA 1: Dados pessoais
     # ------------------------------------------------------
     with tab1:
         st.subheader("📋 Dados Pessoais")
-        col1, col2 = st.columns(2)
-        with col1:
-            novo_nome = st.text_input("Nome completo", value=nome_atual, key="nome_input")
-        with col2:
-            novo_email = st.text_input("E-mail", value=email_atual, key="email_input")
 
-        st.write(f"**Tipo de usuário:** {tipo_usuario}")
-        st.write(f"**Membro desde:** {usuario.get('criado_em', 'N/A')}")
+        nome = st.text_input(
+            "Nome completo",
+            value=usuario.get("nome", ""),
+        )
 
-        if st.button("💾 Salvar alterações", key="btn_save_dados"):
-            if novo_nome and novo_email:
-                if atualizar_dados_usuario(usuario_id, novo_nome, novo_email):
+        email = st.text_input(
+            "E-mail",
+            value=usuario.get("email", ""),
+        )
+
+        st.write(f"**Tipo de usuário:** {usuario.get('tipo_usuario', '-')}")
+        st.write(f"**E-mail confirmado:** {'✅' if usuario.get('email_confirmado') else '❌'}")
+        st.write(f"**Criado em:** {usuario.get('data_cadastro', '-')}")
+        
+        if st.button("💾 Salvar alterações"):
+            if not nome or not email:
+                st.warning("⚠️ Preencha todos os campos.")
+            else:
+                sucesso = atualizar_dados_usuario(usuario_id, nome, email)
+                if sucesso:
                     st.success("✅ Dados atualizados com sucesso!")
-                    st.session_state["usuario"]["nome"] = novo_nome
-                    st.session_state["usuario"]["email"] = novo_email
+                    st.session_state["user_data"]["nome"] = nome
+                    st.session_state["user_data"]["email"] = email
                     st.rerun()
                 else:
                     st.error("❌ Erro ao atualizar dados.")
-            else:
-                st.warning("⚠️ Preencha todos os campos.")
 
     # ------------------------------------------------------
-    # ABA 2: Segurança
+    # ABA 2: Conta (informativo por enquanto)
     # ------------------------------------------------------
     with tab2:
-        st.subheader("🔐 Segurança")
-        st.write("**Alterar Senha**")
-        col1, col2 = st.columns(2)
-        with col1:
-            senha_atual = st.text_input("Senha atual", type="password", key="senha_atual")
-        with col2:
-            nova_senha = st.text_input("Nova senha", type="password", key="nova_senha")
+        st.subheader("⚙️ Conta")
 
-        senha_confirmacao = st.text_input("Confirmar nova senha", type="password", key="senha_conf")
+        st.info(
+            """
+            🔐 **Segurança da conta**
 
-        if st.button("🔄 Alterar Senha", key="btn_change_password"):
-            if not senha_atual or not nova_senha or not senha_confirmacao:
-                st.warning("⚠️ Preencha todos os campos.")
-            elif nova_senha != senha_confirmacao:
-                st.error("❌ As senhas não coincidem.")
-            elif len(nova_senha) < 8:
-                st.error("❌ A senha deve ter pelo menos 8 caracteres.")
-            else:
-                try:
-                    sucesso, mensagem = redefinir_senha(usuario_id, senha_atual, nova_senha)
-                    if sucesso:
-                        st.success(f"✅ {mensagem}")
-                    else:
-                        st.error(f"❌ {mensagem}")
-                except Exception as e:
-                    st.error(f"❌ Erro inesperado: {e}")
-                    logger.exception(f"Erro ao redefinir senha para usuario_id={usuario_id}")
+            - Alteração de senha  
+            - Recuperação de conta  
+            - Preferências de notificação  
+
+            Essas funcionalidades estarão disponíveis em versões futuras.
+            """
+        )
 
         st.divider()
-        st.write("**Recuperação de Conta**")
-        if st.button("📧 Enviar link de recuperação", key="btn_recovery"):
-            st.info("📧 Link de recuperação enviado para seu e-mail.")
 
-    # ------------------------------------------------------
-    # ABA 3: Preferências
-    # ------------------------------------------------------
-    with tab3:
-        st.subheader("⚙️ Preferências")
-        notificacoes = st.checkbox("Receber notificações por e-mail", value=True)
-        newsletter = st.checkbox("Receber newsletter", value=False)
-
-        if st.button("💾 Salvar preferências", key="btn_save_prefs"):
-            st.success("✅ Preferências salvas!")
-
-        st.divider()
-        st.write("**Deletar Conta**")
-        if st.checkbox("Tenho certeza que desejo deletar minha conta", key="confirm_delete"):
-            if st.button("🗑️ Deletar conta permanentemente", key="btn_delete"):
-                st.error("❌ Conta deletada. Você será desconectado.")
-                st.session_state.clear()
-                st.rerun()
+        st.warning("🗑️ **Exclusão de conta**")
+        st.write(
+            "Para excluir sua conta, entre em contato com o suporte."
+        )
 
 __all__ = ["render"]
