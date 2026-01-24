@@ -1,3 +1,10 @@
+import streamlit as st
+st.write("Admin page iniciou")
+
+from backend.auth.user import criar_usuario
+
+st.write("Auth import OK")
+
 # PetDor2/pages/admin.py
 """
 Página administrativa - gerenciamento de usuários e sistema.
@@ -185,3 +192,4 @@ def render(user_data: dict = None):
 
 
 __all__ = ["render"]
+
