@@ -1,95 +1,74 @@
-# PETdor2/backend/auth/email_confirmation.py
 """
-Módulo de confirmação de e-mail do PETDor.
-Gerencia criação e validação de tokens, envio de e-mail e atualização do status no banco.
+Confirmação de e-mail de usuários - PETDor
+Fluxo simples, seguro e compatível com Supabase REST + RLS
 """
 
 import logging
+import uuid
 from datetime import datetime
-from typing import Tuple, Dict, Any
+from typing import Tuple, Optional
 
-# Importações absolutas — evita import circular
-from backend.database.supabase_client import (
-    supabase_table_update,
+from backend.database import (
     supabase_table_select,
+    supabase_table_update,
 )
-from backend.auth.security import (
-    gerar_token_confirmacao_email,
-    validar_token_confirmacao_email,
-)
-from backend.auth.user import (
-    marcar_email_como_confirmado,
-    buscar_usuario_por_email,
-)
+from backend.utils.email_sender import enviar_email_confirmacao_generico
+from backend.utils.config import STREAMLIT_APP_URL
 
 logger = logging.getLogger(__name__)
 
 TABELA_USUARIOS = "usuarios"
 
+# ==========================================================
+# 1️⃣ Gerar token e enviar e-mail
+# ==========================================================
 
-# ============================================================
-# 1) GERAR TOKEN E ENVIAR E-MAIL DE CONFIRMAÇÃO
-# ============================================================
-def enviar_email_confirmacao(email: str, nome: str, user_id: int) -> Tuple[bool, str]:
+def enviar_email_confirmacao(email: str, nome: str, usuario_id: str) -> Tuple[bool, str]:
     """
-    Gera token JWT, salva no banco e envia link de confirmação para o usuário.
+    Gera token UUID, salva no banco e envia e-mail de confirmação.
     """
-
-    # Import tardio evita import circular com utils.email_sender
-    from backend.utils.email_sender import enviar_email_confirmacao_generico
-    from backend.utils.config import STREAMLIT_APP_URL
-
     try:
-        # Gera token JWT único
-        token = gerar_token_confirmacao_email(email=email, user_id=user_id)
+        token = str(uuid.uuid4())
 
-        # Salva token no Supabase
-        dados_update = {
-            "email_confirm_token": token,
-            "atualizado_em": datetime.now().isoformat(),
-        }
-
-        ok_update, msg_update = supabase_table_update(
-            TABELA_USUARIOS, dados_update, {"id": user_id}
+        # Salva token no banco
+        atualizado = supabase_table_update(
+            table=TABELA_USUARIOS,
+            filters={"id": usuario_id},
+            data={
+                "email_confirm_token": token,
+                "atualizado_em": datetime.utcnow().isoformat(),
+            },
         )
 
-        if not ok_update:
-            logger.error(
-                f"❌ Falha ao salvar token de confirmação para usuário {user_id}: {msg_update}"
-            )
-            return False, "Erro ao gerar link de confirmação."
+        if atualizado is None:
+            return False, "Erro ao gerar token de confirmação."
 
-        # Monta link de confirmação
         link = f"{STREAMLIT_APP_URL}?action=confirm_email&token={token}"
 
         assunto = "Confirme seu e-mail - PETDor"
 
         corpo_html = f"""
         <html>
-        <body>
-            <p>Olá, {nome}!</p>
-            <p>Obrigado por se cadastrar no PETDor.</p>
-            <p>Para ativar sua conta, clique no link abaixo:</p>
-            <p><a href="{link}">🔗 Confirmar meu E-mail</a></p>
-            <br/>
+          <body>
+            <p>Olá, <strong>{nome}</strong>!</p>
+            <p>Para ativar sua conta no PETDor, clique no link abaixo:</p>
+            <p><a href="{link}">🔗 Confirmar meu e-mail</a></p>
+            <br>
             <p>Se você não criou esta conta, ignore este e-mail.</p>
-        </body>
+          </body>
         </html>
         """
 
         corpo_texto = f"""
 Olá, {nome}!
 
-Obrigado por se cadastrar no PETDor.
+Para ativar sua conta no PETDor, acesse o link abaixo:
 
-Para ativar sua conta, acesse o link abaixo:
+{link}
 
-🔗 {link}
-
-Se você não criou esta conta, apenas ignore este e-mail.
+Se você não criou esta conta, ignore este e-mail.
 """
 
-        # Enviar e-mail
         ok_email, msg_email = enviar_email_confirmacao_generico(
             destinatario_email=email,
             assunto=assunto,
@@ -98,57 +77,68 @@ Se você não criou esta conta, apenas ignore este e-mail.
         )
 
         if not ok_email:
-            logger.error(f"❌ Erro ao enviar e-mail de confirmação para {email}: {msg_email}")
-            return False, "Falha ao enviar o e-mail de confirmação."
+            logger.error(f"Erro ao enviar e-mail: {msg_email}")
+            return False, "Erro ao enviar e-mail de confirmação."
 
-        logger.info(f"✅ E-mail de confirmação enviado para {email} (user_id={user_id})")
-        return True, "E-mail de confirmação enviado com sucesso."
+        logger.info(f"E-mail de confirmação enviado para {email}")
+        return True, "E-mail de confirmação enviado."
 
     except Exception as e:
-        logger.exception(f"Erro interno ao enviar e-mail de confirmação: {e}")
-        return False, "Erro interno ao enviar e-mail de confirmação."
+        logger.exception("Erro ao enviar e-mail de confirmação")
+        return False, "Erro interno ao enviar e-mail."
 
 
-# ============================================================
-# 2) VALIDAR TOKEN DE CONFIRMAÇÃO
-# ============================================================
-def confirmar_email_com_token(token: str) -> Tuple[bool, str]:
+# ==========================================================
+# 2️⃣ Validar token
+# ==========================================================
+
+def validar_token_confirmacao(token: str) -> Tuple[bool, Optional[str]]:
     """
-    Valida o token JWT e confirma o e-mail do usuário no banco.
+    Valida token de confirmação.
     """
-
     try:
-        payload, msg_validacao = validar_token_confirmacao_email(token)
+        resultado = supabase_table_select(
+            table=TABELA_USUARIOS,
+            filters={
+                "email_confirm_token": token,
+                "ativo": True,
+            },
+            limit=1,
+        )
 
-        if not payload:
-            return False, msg_validacao
+        if not resultado:
+            return False, None
 
-        email = payload.get("email")
-        user_id = payload.get("user_id")
+        return True, resultado[0]["id"]
 
-        if not email or not user_id:
-            return False, "Token inválido ou incompleto."
+    except Exception as e:
+        logger.error("Erro ao validar token", exc_info=True)
+        return False, None
 
-        # Busca usuário
-        ok_user, usuario = buscar_usuario_por_email(email)
 
-        if not ok_user or not usuario:
-            return False, "Usuário não encontrado."
+# ==========================================================
+# 3️⃣ Confirmar e-mail
+# ==========================================================
 
-        # Verifica se token do banco é igual ao recebido
-        if usuario.get("email_confirm_token") != token:
-            return False, "Token inválido ou já utilizado."
+def confirmar_email(usuario_id: str) -> Tuple[bool, str]:
+    """
+    Confirma o e-mail do usuário e invalida o token.
+    """
+    try:
+        atualizado = supabase_table_update(
+            table=TABELA_USUARIOS,
+            filters={"id": usuario_id},
+            data={
+                "email_confirmado": True,
+                "email_confirm_token": None,
+            },
+        )
 
-        # Marca o e-mail como confirmado
-        ok_marcar, msg_marcar = marcar_email_como_confirmado(email)
-
-        if not ok_marcar:
-            logger.error(f"❌ Erro ao confirmar e-mail {email}: {msg_marcar}")
+        if atualizado is None:
             return False, "Erro ao confirmar e-mail."
 
-        logger.info(f"✅ E-mail confirmado com sucesso: {email} (user_id={user_id})")
-        return True, "E-mail confirmado com sucesso! Você já pode fazer login."
+        return True, "E-mail confirmado com sucesso."
 
     except Exception as e:
-        logger.exception(f"Erro interno ao confirmar e-mail com token: {e}")
+        logger.error("Erro ao confirmar e-mail", exc_info=True)
         return False, "Erro interno ao confirmar e-mail."
