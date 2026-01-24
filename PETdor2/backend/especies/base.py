@@ -1,3 +1,5 @@
+# backend/especies/base.py
+
 from dataclasses import dataclass, field
 from typing import List, Dict
 
@@ -6,7 +8,7 @@ from typing import List, Dict
 class Pergunta:
     id: str
     texto: str
-    escala: str        # Ex: "0-7", "sim-nao"
+    escala: str
     peso: float = 1.0
 
 
@@ -24,7 +26,7 @@ class EspecieConfig:
     categorias: List[Categoria]
     limites_dor: Dict[str, str] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict:
+    def to_dict(self) -> dict:
         return {
             "id": self.id,
             "nome": self.nome,
@@ -32,17 +34,10 @@ class EspecieConfig:
                 {
                     "id": c.id,
                     "nome": c.nome,
-                    "perguntas": [
-                        {
-                            "id": p.id,
-                            "texto": p.texto,
-                            "escala": p.escala,
-                            "peso": p.peso,
-                        }
-                        for p in c.perguntas
-                    ],
+                    "perguntas": [p.__dict__ for p in c.perguntas],
                 }
                 for c in self.categorias
             ],
             "limites_dor": self.limites_dor,
         }
+
