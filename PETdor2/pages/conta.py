@@ -1,18 +1,16 @@
-# PETdor2/pages/conta.py
 """
-Página de gerenciamento de conta do usuário.
-Permite atualizar dados pessoais, redefinir senha e gerenciar preferências.
+Página de gerenciamento de conta do usuário - PETDor2
+Permite visualizar e atualizar dados básicos da conta.
 """
 
 import streamlit as st
 import logging
 from typing import Dict, Any
 
-from backend.database import (
-    supabase_table_update,
-)
+from backend.database import supabase_table_update
 
 logger = logging.getLogger(__name__)
+
 
 # ==========================================================
 # Atualizar dados do usuário
@@ -24,7 +22,7 @@ def atualizar_dados_usuario(
     email: str,
 ) -> bool:
     try:
-        atualizado = supabase_table_update(
+        result = supabase_table_update(
             table="usuarios",
             filters={"id": usuario_id},
             data={
@@ -32,18 +30,18 @@ def atualizar_dados_usuario(
                 "email": email.strip().lower(),
             },
         )
-        return atualizado is not None
-    except Exception as e:
-        logger.error("Erro ao atualizar dados do usuário", exc_info=True)
+        return result is not None
+    except Exception:
+        logger.exception("Erro ao atualizar dados do usuário")
         return False
 
 
 # ==========================================================
-# Renderização
+# Render
 # ==========================================================
 
 def render():
-    st.header("👤 Minha Conta")
+    st.title("👤 Minha Conta")
 
     # ------------------------------------------------------
     # Usuário logado
@@ -58,12 +56,12 @@ def render():
     # ------------------------------------------------------
     # Abas
     # ------------------------------------------------------
-    tab1, tab2 = st.tabs(["📋 Dados Pessoais", "⚙️ Conta"])
+    tab_dados, tab_conta = st.tabs(["📋 Dados Pessoais", "⚙️ Conta"])
 
     # ------------------------------------------------------
     # ABA 1: Dados pessoais
     # ------------------------------------------------------
-    with tab1:
+    with tab_dados:
         st.subheader("📋 Dados Pessoais")
 
         nome = st.text_input(
@@ -76,38 +74,46 @@ def render():
             value=usuario.get("email", ""),
         )
 
-        st.write(f"**Tipo de usuário:** {usuario.get('tipo_usuario', '-')}")
-        st.write(f"**E-mail confirmado:** {'✅' if usuario.get('email_confirmado') else '❌'}")
-        st.write(f"**Criado em:** {usuario.get('data_cadastro', '-')}")
-        
+        st.divider()
+
+        st.write(f"**Tipo de usuário:** {usuario.get('tipo_usuario', '-').title()}")
+        st.write(
+            "**E-mail confirmado:**",
+            "✅ Sim" if usuario.get("email_confirmado") else "❌ Não",
+        )
+        st.write(
+            f"**Criado em:** {usuario.get('data_cadastro', '—')}"
+        )
+
         if st.button("💾 Salvar alterações"):
             if not nome or not email:
                 st.warning("⚠️ Preencha todos os campos.")
+                return
+
+            sucesso = atualizar_dados_usuario(usuario_id, nome, email)
+
+            if sucesso:
+                st.success("✅ Dados atualizados com sucesso!")
+                st.session_state["user_data"]["nome"] = nome
+                st.session_state["user_data"]["email"] = email
+                st.rerun()
             else:
-                sucesso = atualizar_dados_usuario(usuario_id, nome, email)
-                if sucesso:
-                    st.success("✅ Dados atualizados com sucesso!")
-                    st.session_state["user_data"]["nome"] = nome
-                    st.session_state["user_data"]["email"] = email
-                    st.rerun()
-                else:
-                    st.error("❌ Erro ao atualizar dados.")
+                st.error("❌ Erro ao atualizar dados.")
 
     # ------------------------------------------------------
-    # ABA 2: Conta (informativo por enquanto)
+    # ABA 2: Conta
     # ------------------------------------------------------
-    with tab2:
+    with tab_conta:
         st.subheader("⚙️ Conta")
 
         st.info(
             """
             🔐 **Segurança da conta**
 
-            - Alteração de senha  
-            - Recuperação de conta  
-            - Preferências de notificação  
-
-            Essas funcionalidades estarão disponíveis em versões futuras.
+            Funcionalidades planejadas:
+            - Alteração de senha
+            - Recuperação de conta
+            - Preferências de notificação
             """
         )
 
@@ -115,7 +121,8 @@ def render():
 
         st.warning("🗑️ **Exclusão de conta**")
         st.write(
-            "Para excluir sua conta, entre em contato com o suporte."
+            "Para excluir sua conta, entre em contato com o suporte do PETDor."
         )
+
 
 __all__ = ["render"]
