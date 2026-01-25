@@ -1,6 +1,5 @@
-# PETdor2/pages/historico.py
 """
-Página de histórico de avaliações do pet.
+Página de histórico de avaliações do PETDor2
 Exibe todas as avaliações realizadas pelo usuário logado.
 """
 
@@ -18,13 +17,13 @@ from backend.database import (
 
 logger = logging.getLogger(__name__)
 
+
 # ==========================================================
 # Buscar avaliações do tutor
 # ==========================================================
 
 def buscar_avaliacoes_tutor(tutor_id: str) -> List[Dict[str, Any]]:
     try:
-        # Busca avaliações
         avaliacoes = supabase_table_select(
             table="avaliacoes_dor",
             filters={"avaliador_id": tutor_id},
@@ -34,25 +33,24 @@ def buscar_avaliacoes_tutor(tutor_id: str) -> List[Dict[str, Any]]:
         if not avaliacoes:
             return []
 
-        # Busca animais relacionados
-        animais_ids = list({a["animal_id"] for a in avaliacoes})
+        # Busca TODOS os animais do tutor (REST-safe)
         animais = supabase_table_select(
             table="animais",
-            filters={"id": f"in.({','.join(animais_ids)})"},
+            filters={"tutor_id": tutor_id},
         ) or []
 
         animais_map = {a["id"]: a for a in animais}
 
         # Enriquecer avaliações
         for a in avaliacoes:
-            animal = animais_map.get(a["animal_id"], {})
+            animal = animais_map.get(a.get("animal_id"), {})
             a["animal_nome"] = animal.get("nome", "Desconhecido")
             a["animal_especie"] = animal.get("especie", "Desconhecida")
 
         return avaliacoes
 
-    except Exception as e:
-        logger.error("Erro ao buscar histórico de avaliações", exc_info=True)
+    except Exception:
+        logger.exception("Erro ao buscar histórico de avaliações")
         return []
 
 
@@ -67,7 +65,7 @@ def deletar_avaliacao(avaliacao_id: str) -> bool:
             filters={"id": avaliacao_id},
         )
     except Exception:
-        logger.error("Erro ao deletar avaliação", exc_info=True)
+        logger.exception("Erro ao deletar avaliação")
         return False
 
 
@@ -76,7 +74,7 @@ def deletar_avaliacao(avaliacao_id: str) -> bool:
 # ==========================================================
 
 def render():
-    st.header("📊 Histórico de Avaliações")
+    st.title("📊 Histórico de Avaliações")
 
     usuario = st.session_state.get("user_data")
     if not usuario:
@@ -94,7 +92,7 @@ def render():
     st.divider()
 
     for aval in avaliacoes:
-        aval_id = aval["id"]
+        aval_id = aval.get("id")
         criado_em = aval.get("criado_em")
         pontuacao = aval.get("pontuacao_total", 0)
         respostas = aval.get("respostas", {})
@@ -118,7 +116,8 @@ def render():
 
             with col2:
                 st.write(f"🧮 **Pontuação de Dor:** {pontuacao}")
-                st.progress(min(pontuacao / 20, 1.0))
+                max_ref = max(pontuacao, 10)
+                st.progress(min(pontuacao / max_ref, 1.0))
 
             st.divider()
             st.write("📝 **Respostas:**")
@@ -162,14 +161,12 @@ def render():
     st.divider()
     st.subheader("📈 Resumo Geral")
 
+    total = len(avaliacoes)
+    media = sum(a.get("pontuacao_total", 0) for a in avaliacoes) / total
+
     col1, col2 = st.columns(2)
-
-    with col1:
-        st.metric("Total de Avaliações", len(avaliacoes))
-
-    with col2:
-        media = sum(a.get("pontuacao_total", 0) for a in avaliacoes) / len(avaliacoes)
-        st.metric("Pontuação Média", f"{media:.1f}")
+    col1.metric("Total de Avaliações", total)
+    col2.metric("Pontuação Média", f"{media:.1f}")
 
 
 __all__ = ["render"]
