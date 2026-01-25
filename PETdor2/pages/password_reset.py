@@ -25,9 +25,15 @@ def render():
         "Se ele existir no sistema, enviaremos um link para redefinir sua senha."
     )
 
-    email = st.text_input("📧 E-mail cadastrado").strip().lower()
+    email = st.text_input(
+        "📧 E-mail cadastrado",
+        placeholder="seu@email.com"
+    ).strip().lower()
 
     if st.button("📨 Enviar link de recuperação"):
+        # -----------------------------
+        # Validações
+        # -----------------------------
         if not email:
             st.error("❌ Por favor, digite seu e-mail.")
             return
@@ -36,16 +42,23 @@ def render():
             st.error("❌ E-mail inválido.")
             return
 
+        # -----------------------------
+        # Solicitação de reset
+        # -----------------------------
         try:
-            with st.spinner("⏳ Processando solicitação..."):
+            with st.spinner("⏳ Enviando link de recuperação..."):
                 sucesso, mensagem = solicitar_reset_senha(email)
 
-            if sucesso:
-                st.success("✅ Solicitação realizada com sucesso!")
-                st.info(mensagem)
-                st.info("📬 Verifique sua caixa de entrada e a pasta de spam.")
-            else:
-                st.error(mensagem)
+            # Mensagem SEMPRE genérica (segurança)
+            st.success("✅ Solicitação processada com sucesso!")
+            st.info(mensagem)
+            st.info("📬 Verifique sua caixa de entrada e a pasta de spam.")
+
+            # UX: botão de retorno
+            st.divider()
+            if st.button("🔐 Voltar para o login"):
+                st.session_state.pagina = "login"
+                st.rerun()
 
         except Exception:
             logger.error("Erro ao solicitar reset de senha", exc_info=True)
