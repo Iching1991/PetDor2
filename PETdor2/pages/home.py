@@ -1,4 +1,3 @@
-# PetDor2/pages/home.py
 """
 Página inicial (dashboard) do PETDor2.
 Exibe informações básicas do usuário e atalhos principais.
@@ -11,70 +10,78 @@ logger = logging.getLogger(__name__)
 
 
 def render():
-    """
-    Renderiza a página inicial após o login.
-    """
     st.title("🏠 Página Inicial")
 
     # ------------------------------------------------------
-    # Verificação de login
+    # 🔐 Verificação de login
     # ------------------------------------------------------
     user_data = st.session_state.get("user_data")
 
     if not user_data:
         st.warning("⚠️ Você precisa estar logado para acessar esta página.")
+        st.session_state.pagina = "login"
         st.stop()
 
+    nome = user_data.get("nome", "Usuário")
+
     # ------------------------------------------------------
-    # Boas-vindas
+    # 👋 Boas-vindas
     # ------------------------------------------------------
-    st.success(f"Bem-vindo(a), {user_data.get('nome', 'usuário')}!")
+    st.success(f"Bem-vindo(a), **{nome}**!")
     st.write(
-        "Aqui ficará o dashboard do PETDor, com estatísticas, atalhos "
-        "e informações relevantes."
+        "Este é o painel principal do **PETDor**. "
+        "Aqui você pode avaliar seus pets, acompanhar o histórico "
+        "e gerenciar sua conta."
     )
 
     st.divider()
 
     # ------------------------------------------------------
-    # Informações do usuário
+    # 👤 Informações do usuário
     # ------------------------------------------------------
     st.subheader("👤 Suas informações")
-    st.write(f"**E-mail:** {user_data.get('email', 'Não informado')}")
-    st.write(f"**Tipo de usuário:** {user_data.get('tipo_usuario', 'Não informado')}")
-    st.write(f"**País:** {user_data.get('pais', 'Não informado')}")
-    st.write(
-        f"**E-mail confirmado:** {'✅' if user_data.get('email_confirmado') else '❌'}"
-    )
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.write(f"📧 **E-mail:** {user_data.get('email', 'Não informado')}")
+        st.write(f"🌍 **País:** {user_data.get('pais', 'Não informado')}")
+
+    with col2:
+        st.write(f"👥 **Tipo de usuário:** {user_data.get('tipo_usuario', '-')}")
+        st.write(
+            f"📨 **E-mail confirmado:** "
+            f"{'✅ Sim' if user_data.get('email_confirmado') else '❌ Não'}"
+        )
 
     st.divider()
 
     # ------------------------------------------------------
-    # Ações rápidas
+    # ⚡ Ações rápidas
     # ------------------------------------------------------
     st.subheader("⚡ Ações rápidas")
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        if st.button("📋 Nova Avaliação"):
+        if st.button("📋 Nova Avaliação", use_container_width=True):
             st.session_state.pagina = "avaliacao"
             st.rerun()
 
     with col2:
-        if st.button("📊 Histórico"):
+        if st.button("📊 Histórico", use_container_width=True):
             st.session_state.pagina = "historico"
             st.rerun()
 
     with col3:
-        if st.button("👤 Minha Conta"):
+        if st.button("👤 Minha Conta", use_container_width=True):
             st.session_state.pagina = "conta"
             st.rerun()
 
     st.divider()
 
     # ------------------------------------------------------
-    # Logout
+    # 🚪 Logout
     # ------------------------------------------------------
     if st.button("🚪 Sair da Conta", key="btn_logout_home"):
         st.session_state.clear()
