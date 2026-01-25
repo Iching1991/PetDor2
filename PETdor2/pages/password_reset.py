@@ -1,100 +1,67 @@
 # PETdor2/pages/password_reset.py
 """
-Reset de senha de usuários
-Compatível com Supabase REST + RLS
+Página de recuperação de senha - PETDor2
+Envia link de redefinição de senha por e-mail.
 """
 
+import streamlit as st
 import logging
-import hashlib
-from typing import Tuple, Dict, Any
 
-from backend.database import (
-    supabase_table_select,
-    supabase_table_update,
-    supabase_table_delete,
-)
+from backend.auth.password_reset import solicitar_reset_senha
+from backend.utils.validators import validar_email
 
 logger = logging.getLogger(__name__)
 
 
 # ==========================================================
-# Utils
+# Render
 # ==========================================================
 
-def hash_senha(senha: str) -> str:
-    return hashlib.sha256(senha.encode("utf-8")).hexdigest()
+def render():
+    st.header("🔐 Recuperar Senha")
+
+    st.write(
+        "Digite o e-mail utilizado no cadastro. "
+        "Se ele existir no sistema, enviaremos um link para redefinir sua senha."
+    )
+
+    email = st.text_input("📧 E-mail cadastrado").strip().lower()
+
+    if st.button("📨 Enviar link de recuperação"):
+        # -----------------------------
+        # Validações
+        # -----------------------------
+        if not email:
+            st.error("❌ Por favor, digite seu e-mail.")
+            return
+
+        if not validar_email(email):
+            st.error("❌ E-mail inválido.")
+            return
+
+        # -----------------------------
+        # Solicitar reset
+        # -----------------------------
+        try:
+            with st.spinner("⏳ Processando solicitação..."):
+                sucesso, mensagem = solicitar_reset_senha(email)
+
+            if sucesso:
+                st.success("✅ Solicitação realizada com sucesso!")
+                st.info(
+                    "📧 Verifique sua caixa de entrada e a pasta de spam. "
+                    "O link pode levar alguns minutos para chegar."
+                )
+            else:
+                # Mensagem genérica (não expõe se e-mail existe ou não)
+                st.warning(mensagem)
+
+        except Exception as e:
+            logger.error("Erro ao solicitar reset de senha", exc_info=True)
+            st.error(
+                "⚠️ Erro interno ao processar a solicitação. "
+                "Tente novamente mais tarde."
+            )
 
 
-# ==========================================================
-# Validar token de reset
-# ==========================================================
-
-def validar_token_reset(token: str) -> Tuple[bool, Dict[str, Any]]:
-    """
-    Valida token de redefinição de senha.
-
-    Retorna:
-        (True, {email, usuario_id}) se válido
-        (False, {erro}) se inválido
-    """
-    try:
-        resultado = supabase_table_select(
-            table="tokens_reset_senha",
-            filters={"token": token},
-            limit=1,
-        )
-
-        if not resultado:
-            return False, {"erro": "Token inválido ou expirado."}
-
-        registro = resultado[0]
-
-        return True, {
-            "email": registro.get("email"),
-            "usuario_id": registro.get("usuario_id"),
-        }
-
-    except Exception as e:
-        logger.error(f"Erro ao validar token de reset: {e}", exc_info=True)
-        return False, {"erro": "Erro interno ao validar token."}
-
-
-# ==========================================================
-# Redefinir senha com token
-# ==========================================================
-
-def redefinir_senha_com_token(token: str, nova_senha: str) -> Tuple[bool, str]:
-    """
-    Redefine a senha do usuário usando token válido.
-    """
-    try:
-        valido, dados = validar_token_reset(token)
-
-        if not valido:
-            return False, dados.get("erro", "Token inválido.")
-
-        usuario_id = dados["usuario_id"]
-        senha_hash = hash_senha(nova_senha)
-
-        # Atualiza senha
-        atualizado = supabase_table_update(
-            table="usuarios",
-            filters={"id": usuario_id},
-            data={"senha_hash": senha_hash},
-        )
-
-        if atualizado is None:
-            return False, "Erro ao atualizar senha."
-
-        # Remove token (invalida)
-        supabase_table_delete(
-            table="tokens_reset_senha",
-            filters={"token": token},
-        )
-
-        logger.info(f"Senha redefinida com sucesso para usuario_id={usuario_id}")
-        return True, "Senha redefinida com sucesso."
-
-    except Exception as e:
-        logger.error(f"Erro ao redefinir senha: {e}", exc_info=True)
-        return False, "Erro interno ao redefinir senha."
+__all__ = ["render"]
