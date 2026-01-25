@@ -1,5 +1,4 @@
-# backend/auth/user.py
-
+"""
 Módulo central de usuários do PETDor2
 Compatível com Supabase REST + RLS
 """
@@ -14,14 +13,12 @@ from backend.database import (
     supabase_table_delete,
 )
 
-
 # ==========================================================
 # Utils
 # ==========================================================
 
 def hash_senha(senha: str) -> str:
     return hashlib.sha256(senha.encode("utf-8")).hexdigest()
-
 
 # ==========================================================
 # Criar usuário (Cadastro)
@@ -37,7 +34,6 @@ def cadastrar_usuario(
     try:
         email = email.lower().strip()
 
-        # Verifica se já existe
         existente = supabase_table_select(
             table="usuarios",
             filters={"email": email},
@@ -46,18 +42,17 @@ def cadastrar_usuario(
         if existente:
             return False, "Este e-mail já está cadastrado."
 
-        senha_hash = hash_senha(senha)
-
         supabase_table_insert(
             table="usuarios",
             data={
-                "nome": nome,
+                "nome": nome.strip(),
                 "email": email,
-                "senha_hash": senha_hash,
+                "senha_hash": hash_senha(senha),
                 "tipo_usuario": tipo.lower(),
                 "pais": pais,
                 "email_confirmado": False,
                 "ativo": True,
+                "is_admin": False,
             }
         )
 
@@ -66,9 +61,8 @@ def cadastrar_usuario(
     except Exception as e:
         return False, f"Erro ao criar usuário: {e}"
 
-
 # ==========================================================
-# Buscar usuário por e-mail
+# Buscar usuário
 # ==========================================================
 
 def buscar_usuario_por_email(email: str) -> Optional[Dict[str, Any]]:
@@ -79,9 +73,8 @@ def buscar_usuario_por_email(email: str) -> Optional[Dict[str, Any]]:
     )
     return resultado[0] if resultado else None
 
-
 # ==========================================================
-# Verificar credenciais (Login)
+# Login
 # ==========================================================
 
 def verificar_credenciais(email: str, senha: str) -> Tuple[bool, Any]:
@@ -93,22 +86,16 @@ def verificar_credenciais(email: str, senha: str) -> Tuple[bool, Any]:
     if not usuario.get("ativo", True):
         return False, "Usuário desativado."
 
-    senha_hash = hash_senha(senha)
-
-    if usuario.get("senha_hash") != senha_hash:
+    if usuario.get("senha_hash") != hash_senha(senha):
         return False, "Senha incorreta."
 
     return True, usuario
 
-
 # ==========================================================
-# Atualizar usuário (dados gerais)
+# Atualizar dados
 # ==========================================================
 
-def atualizar_usuario(
-    user_id: str,
-    **dados
-) -> Tuple[bool, str]:
+def atualizar_usuario(user_id: str, dados: Dict[str, Any]) -> Tuple[bool, str]:
     atualizado = supabase_table_update(
         table="usuarios",
         filters={"id": user_id},
@@ -120,36 +107,18 @@ def atualizar_usuario(
 
     return True, "Usuário atualizado com sucesso."
 
-
 # ==========================================================
-# Ativar / Desativar usuário (Admin)
-# ==========================================================
-
-def atualizar_status_usuario(
-    user_id: str,
-    ativo: bool
-) -> Tuple[bool, str]:
-    atualizado = supabase_table_update(
-        table="usuarios",
-        filters={"id": user_id},
-        data={"ativo": ativo}
-    )
-
-    if atualizado is None:
-        return False, "Erro ao atualizar status."
-
-    return True, "Status atualizado com sucesso."
-
-
-# ==========================================================
-# Redefinir senha (usuário logado)
+# Status
 # ==========================================================
 
-def redefinir_senha(
-    user_id: str,
-    senha_atual: str,
-    nova_senha: str
-) -> Tuple[bool, str]:
+def atualizar_status_usuario(user_id: str, ativo: bool) -> Tuple[bool, str]:
+    return atualizar_usuario(user_id, {"ativo": ativo})
+
+# ==========================================================
+# Redefinir senha
+# ==========================================================
+
+def redefinir_senha(user_id: str, senha_atual: str, nova_senha: str) -> Tuple[bool, str]:
     usuario = supabase_table_select(
         table="usuarios",
         filters={"id": user_id},
@@ -164,19 +133,16 @@ def redefinir_senha(
     if usuario.get("senha_hash") != hash_senha(senha_atual):
         return False, "Senha atual incorreta."
 
-    nova_hash = hash_senha(nova_senha)
-
     supabase_table_update(
         table="usuarios",
         filters={"id": user_id},
-        data={"senha_hash": nova_hash}
+        data={"senha_hash": hash_senha(nova_senha)}
     )
 
     return True, "Senha alterada com sucesso."
 
-
 # ==========================================================
-# Marcar e-mail como confirmado
+# Confirmar e-mail
 # ==========================================================
 
 def marcar_email_como_confirmado(email: str) -> Tuple[bool, str]:
@@ -194,9 +160,8 @@ def marcar_email_como_confirmado(email: str) -> Tuple[bool, str]:
 
     return True, "E-mail confirmado com sucesso."
 
-
 # ==========================================================
-# Deletar usuário
+# Deletar
 # ==========================================================
 
 def deletar_usuario(user_id: str) -> bool:
