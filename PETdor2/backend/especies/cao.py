@@ -1,53 +1,150 @@
 # PETdor2/backend/especies/cao.py
+
 """
 🐕 Configuração de avaliação para CÃES.
 Escala: 0 a 7 (baseada em CBPI e Glasgow Composite Pain Scale).
 """
-# -------------------------------------------------------------------
-# 🚨 CORREÇÃO AQUI: Importar de .base, não de .index
-# -------------------------------------------------------------------
-from .base import EspecieConfig, Pergunta
+
+from .base import EspecieConfig, Categoria, Pergunta
+
 
 CONFIG_CAES = EspecieConfig(
+    id="cao",
     nome="Cachorro",
-    especie_id="cao",
-    descricao="Avaliação de dor em cães - Escala de 0 (nunca) a 7 (sempre).",
-    opcoes_escala=[
-        "0 - Nunca",
-        "1 - Raramente",
-        "2 - Às vezes",
-        "3 - Frequentemente",
-        "4 - Quase Sempre",
-        "5 - Sempre",
-        "6 - Muito Frequente",
-        "7 - Constante",
-    ],
-    perguntas=[
+    categorias=[
+        # --------------------------------------------------
         # Energia e Atividade
-        Pergunta(texto="Meu cão teve pouca energia", invertida=False, peso=1.0),
-        Pergunta(texto="Meu cão foi brincalhão", invertida=True, peso=1.0),
-        Pergunta(texto="Meu cão fez as suas atividades favoritas", invertida=True, peso=1.0),
+        # --------------------------------------------------
+        Categoria(
+            id="energia_atividade",
+            nome="Energia e Atividade",
+            perguntas=[
+                Pergunta(
+                    id="pouca_energia",
+                    texto="Meu cão teve pouca energia?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="brincalhao",
+                    texto="Meu cão foi brincalhão?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="atividades_favoritas",
+                    texto="Meu cão fez as suas atividades favoritas?",
+                    escala="0-7",
+                ),
+            ],
+        ),
 
+        # --------------------------------------------------
         # Alimentação
-        Pergunta(texto="O apetite do meu cão reduziu", invertida=False, peso=1.0),
-        Pergunta(texto="Meu cão comeu normalmente a sua comida favorita", invertida=True, peso=1.0),
+        # --------------------------------------------------
+        Categoria(
+            id="alimentacao",
+            nome="Alimentação",
+            perguntas=[
+                Pergunta(
+                    id="apetite_reduzido",
+                    texto="O apetite do meu cão reduziu?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="comeu_normalmente",
+                    texto="Meu cão comeu normalmente a sua comida favorita?",
+                    escala="0-7",
+                ),
+            ],
+        ),
 
+        # --------------------------------------------------
         # Mobilidade
-        Pergunta(texto="Meu cão reluta para levantar", invertida=False, peso=1.0),
-        Pergunta(texto="Meu cão teve problemas para levantar-se ou deitar-se", invertida=False, peso=1.0),
-        Pergunta(texto="Meu cão teve problemas para caminhar", invertida=False, peso=1.0),
-        Pergunta(texto="Meu cão caiu ou perdeu o equilíbrio", invertida=False, peso=1.0),
+        # --------------------------------------------------
+        Categoria(
+            id="mobilidade",
+            nome="Mobilidade",
+            perguntas=[
+                Pergunta(
+                    id="reluta_levantar",
+                    texto="Meu cão reluta para levantar?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="dificuldade_levantar_deitar",
+                    texto="Meu cão teve problemas para levantar-se ou deitar-se?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="dificuldade_caminhar",
+                    texto="Meu cão teve problemas para caminhar?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="perda_equilibrio",
+                    texto="Meu cão caiu ou perdeu o equilíbrio?",
+                    escala="0-7",
+                ),
+            ],
+        ),
 
+        # --------------------------------------------------
         # Comportamento Social
-        Pergunta(texto="Meu cão gosta de estar perto de mim", invertida=True, peso=1.0),
-        Pergunta(texto="Meu cão mostrou uma quantidade normal de afeto", invertida=True, peso=1.0),
-        Pergunta(texto="Meu cão gostou de ser tocado ou acariciado", invertida=True, peso=1.0),
+        # --------------------------------------------------
+        Categoria(
+            id="comportamento_social",
+            nome="Comportamento Social",
+            perguntas=[
+                Pergunta(
+                    id="gosta_proximidade",
+                    texto="Meu cão gosta de estar perto de mim?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="afeto_normal",
+                    texto="Meu cão mostrou uma quantidade normal de afeto?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="aceita_toque",
+                    texto="Meu cão gostou de ser tocado ou acariciado?",
+                    escala="0-7",
+                ),
+            ],
+        ),
 
+        # --------------------------------------------------
         # Comportamento Geral
-        Pergunta(texto="Meu cão agiu normalmente", invertida=True, peso=1.0),
-        Pergunta(texto="Meu cão teve problemas para ficar confortável", invertida=False, peso=1.0),
+        # --------------------------------------------------
+        Categoria(
+            id="comportamento_geral",
+            nome="Comportamento Geral",
+            perguntas=[
+                Pergunta(
+                    id="comportamento_normal",
+                    texto="Meu cão agiu normalmente?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="desconforto",
+                    texto="Meu cão teve problemas para ficar confortável?",
+                    escala="0-7",
+                ),
+            ],
+        ),
 
+        # --------------------------------------------------
         # Sono
-        Pergunta(texto="Meu cão dormiu bem durante a noite?", invertida=True, peso=1.0),
+        # --------------------------------------------------
+        Categoria(
+            id="sono",
+            nome="Sono",
+            perguntas=[
+                Pergunta(
+                    id="sono_noturno",
+                    texto="Meu cão dormiu bem durante a noite?",
+                    escala="0-7",
+                ),
+            ],
+        ),
     ],
 )
