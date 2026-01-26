@@ -5,41 +5,76 @@
 Escala: 0 a 7 — baseada em observação comportamental geral.
 """
 
-# --------------------------------------------------------------
-# 🚨 IMPORTAÇÃO CORRIGIDA (Antes estava from .index ❌)
-# --------------------------------------------------------------
-from .base import EspecieConfig, Pergunta
+from .base import EspecieConfig, Categoria, Pergunta
 
 
 CONFIG_AVES = EspecieConfig(
+    id="aves",
     nome="Aves",
-    especie_id="aves",
-    descricao="Avaliação de dor em aves — Escala de 0 (nunca) a 7 (sempre).",
-    opcoes_escala=[
-        "0 - Nunca",
-        "1 - Raramente",
-        "2 - Às vezes",
-        "3 - Frequentemente",
-        "4 - Quase Sempre",
-        "5 - Sempre",
-        "6 - Muito Frequente",
-        "7 - Constante",
-    ],
-    perguntas=[
-        # Postura e Mobilidade
-        Pergunta(texto="Minha ave está com postura anormal (arrepiada, encolhida)", invertida=False, peso=1.0),
-        Pergunta(texto="Minha ave reduziu a movimentação ou não voa mais", invertida=False, peso=1.0),
-
-        # Alimentação e Hábito
-        Pergunta(texto="Minha ave está comendo menos", invertida=False, peso=1.0),
-        Pergunta(texto="Minha ave bebe menos água", invertida=False, peso=1.0),
-
-        # Comportamento
-        Pergunta(texto="Minha ave vocaliza menos ou de forma diferente", invertida=False, peso=1.0),
-        Pergunta(texto="Minha ave evita contato ou fica mais agressiva", invertida=False, peso=1.0),
-
-        # Aparência
-        Pergunta(texto="Minha ave está com penas eriçadas ou desalinhadas", invertida=False, peso=1.0),
-        Pergunta(texto="Minha ave fica muito tempo parada no mesmo lugar", invertida=False, peso=1.0),
+    categorias=[
+        Categoria(
+            id="postura_mobilidade",
+            nome="Postura e Mobilidade",
+            perguntas=[
+                Pergunta(
+                    id="postura_anormal",
+                    texto="Minha ave está com postura anormal (arrepiada, encolhida)?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="reduziu_movimento",
+                    texto="Minha ave reduziu a movimentação ou não voa mais?",
+                    escala="0-7",
+                ),
+            ],
+        ),
+        Categoria(
+            id="alimentacao",
+            nome="Alimentação e Hábito",
+            perguntas=[
+                Pergunta(
+                    id="come_menos",
+                    texto="Minha ave está comendo menos?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="bebe_menos",
+                    texto="Minha ave bebe menos água?",
+                    escala="0-7",
+                ),
+            ],
+        ),
+        Categoria(
+            id="comportamento",
+            nome="Comportamento",
+            perguntas=[
+                Pergunta(
+                    id="vocalizacao_alterada",
+                    texto="Minha ave vocaliza menos ou de forma diferente?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="agressividade",
+                    texto="Minha ave evita contato ou fica mais agressiva?",
+                    escala="0-7",
+                ),
+            ],
+        ),
+        Categoria(
+            id="aparencia",
+            nome="Aparência",
+            perguntas=[
+                Pergunta(
+                    id="penas_eriçadas",
+                    texto="Minha ave está com penas eriçadas ou desalinhadas?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="inatividade",
+                    texto="Minha ave fica muito tempo parada no mesmo lugar?",
+                    escala="0-7",
+                ),
+            ],
+        ),
     ],
 )
