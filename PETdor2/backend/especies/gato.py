@@ -2,50 +2,124 @@
 
 """
 🐈 Configuração de avaliação de dor para GATOS.
-Escala: 0 a 7 (baseada em escalas de dor felina).
+Escala: 0 a 7 — baseada em escalas de dor felina.
 """
 
-# --------------------------------------------------------------
-# 🚨 IMPORTAÇÃO CORRIGIDA (ANTES estava from .index ❌)
-# --------------------------------------------------------------
-from .base import EspecieConfig, Pergunta
+from .base import EspecieConfig, Categoria, Pergunta
 
 
 CONFIG_GATOS = EspecieConfig(
+    id="gato",
     nome="Gato",
-    especie_id="gato",
-    descricao="Avaliação de dor em gatos - Escala de 0 (ausente) a 7 (severa).",
-    opcoes_escala=[
-        "0 - Ausente",
-        "1 - Muito Leve",
-        "2 - Leve",
-        "3 - Moderada",
-        "4 - Moderada a Severa",
-        "5 - Severa",
-        "6 - Muito Severa",
-        "7 - Extrema",
-    ],
-    perguntas=[
+    categorias=[
+        # --------------------------------------------------
         # Comportamento Geral
-        Pergunta(texto="O gato está mais quieto ou menos ativo?", invertida=False, peso=1.0),
-        Pergunta(texto="Há mudanças no apetite ou consumo de água?", invertida=False, peso=1.0),
-        Pergunta(texto="O gato está se escondendo ou evitando interação?", invertida=False, peso=1.0),
+        # --------------------------------------------------
+        Categoria(
+            id="comportamento_geral",
+            nome="Comportamento Geral",
+            perguntas=[
+                Pergunta(
+                    id="menos_ativo",
+                    texto="O gato está mais quieto ou menos ativo?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="mudanca_apetite",
+                    texto="Há mudanças no apetite ou no consumo de água?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="evita_interacao",
+                    texto="O gato está se escondendo ou evitando interação?",
+                    escala="0-7",
+                ),
+            ],
+        ),
 
+        # --------------------------------------------------
         # Mobilidade
-        Pergunta(texto="Há dificuldade para pular, subir ou se mover?", invertida=False, peso=1.0),
-        Pergunta(texto="O gato está lambendo ou mordendo excessivamente alguma parte do corpo?", invertida=False, peso=1.0),
+        # --------------------------------------------------
+        Categoria(
+            id="mobilidade",
+            nome="Mobilidade",
+            perguntas=[
+                Pergunta(
+                    id="dificuldade_pular",
+                    texto="Há dificuldade para pular, subir ou se mover?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="lambe_dor",
+                    texto="O gato está lambendo ou mordendo excessivamente alguma parte do corpo?",
+                    escala="0-7",
+                ),
+            ],
+        ),
 
+        # --------------------------------------------------
         # Postura e Expressão Facial
-        Pergunta(texto="Há alterações na postura (ex: encurvado, cabeça baixa)?", invertida=False, peso=1.0),
-        Pergunta(texto="O gato está com os olhos semicerrados ou com a face tensa?", invertida=False, peso=1.0),
+        # --------------------------------------------------
+        Categoria(
+            id="postura_expressao",
+            nome="Postura e Expressão Facial",
+            perguntas=[
+                Pergunta(
+                    id="postura_anormal",
+                    texto="Há alterações na postura (ex: encurvado ou cabeça baixa)?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="expressao_tensa",
+                    texto="O gato está com os olhos semicerrados ou com a face tensa?",
+                    escala="0-7",
+                ),
+            ],
+        ),
 
+        # --------------------------------------------------
         # Vocalização
-        Pergunta(texto="O gato está vocalizando mais (miados, rosnados) ou menos do que o habitual?", invertida=False, peso=1.0),
+        # --------------------------------------------------
+        Categoria(
+            id="vocalizacao",
+            nome="Vocalização",
+            perguntas=[
+                Pergunta(
+                    id="mudanca_vocalizacao",
+                    texto="O gato está vocalizando mais ou menos do que o habitual?",
+                    escala="0-7",
+                ),
+            ],
+        ),
 
+        # --------------------------------------------------
         # Higiene
-        Pergunta(texto="Há mudanças nos hábitos de higiene (ex: pelo desgrenhado)?", invertida=False, peso=1.0),
+        # --------------------------------------------------
+        Categoria(
+            id="higiene",
+            nome="Higiene",
+            perguntas=[
+                Pergunta(
+                    id="higiene_alterada",
+                    texto="Há mudanças nos hábitos de higiene (ex: pelo desgrenhado)?",
+                    escala="0-7",
+                ),
+            ],
+        ),
 
+        # --------------------------------------------------
         # Sono
-        Pergunta(texto="O gato está dormindo mais ou em posições incomuns?", invertida=False, peso=1.0),
+        # --------------------------------------------------
+        Categoria(
+            id="sono",
+            nome="Sono",
+            perguntas=[
+                Pergunta(
+                    id="sono_alterado",
+                    texto="O gato está dormindo mais ou em posições incomuns?",
+                    escala="0-7",
+                ),
+            ],
+        ),
     ],
 )
