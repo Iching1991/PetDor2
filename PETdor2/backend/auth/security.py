@@ -5,6 +5,8 @@ Compatível com Streamlit + Supabase REST
 """
 
 import streamlit as st
+import secrets
+import hashlib
 from typing import Dict, Any
 
 
@@ -13,36 +15,37 @@ from typing import Dict, Any
 # ==========================================================
 
 def usuario_logado(session_state: Dict[str, Any]) -> bool:
-    """
-    Verifica se o usuário está logado.
-    """
-    return bool(session_state.get("logged_in") and session_state.get("user_data"))
+    return bool(session_state.get("user_data"))
 
 
 def logout(session_state: Dict[str, Any]) -> None:
-    """
-    Encerra a sessão do usuário.
-    """
     keys = [
-        "logged_in",
-        "user_id",
         "user_data",
-        "user_email",
-        "user_name",
-        "is_admin",
+        "pagina",
     ]
     for key in keys:
         session_state.pop(key, None)
 
 
-# ==========================================================
-# Helpers
-# ==========================================================
-
 def exigir_login():
-    """
-    Bloqueia acesso se o usuário não estiver logado.
-    """
     if not usuario_logado(st.session_state):
         st.warning("⚠️ Você precisa estar logado.")
         st.stop()
+
+
+# ==========================================================
+# Segurança
+# ==========================================================
+
+def gerar_token_reset_senha() -> str:
+    """
+    Gera token seguro para redefinição de senha.
+    """
+    return secrets.token_urlsafe(32)
+
+
+def gerar_hash_senha(senha: str) -> str:
+    """
+    Gera hash SHA-256 da senha.
+    """
+    return hashlib.sha256(senha.encode("utf-8")).hexdigest()
