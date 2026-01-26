@@ -1,11 +1,13 @@
-from .supabase_client import supabase
-
-def testar_conexao():
+def testar_conexao() -> bool:
+    """
+    Testa a conexão com o Supabase usando a API REST.
+    """
     try:
-        # Faz uma simples consulta no Supabase
-        response = supabase.table("teste").select("*").limit(1).execute()
-        print("Conexão com Supabase OK!")
-        return True
+        resultado = supabase_table_select(
+            table="usuarios",
+            limit=1
+        )
+        return resultado is not None
     except Exception as e:
-        print("Erro ao conectar ao Supabase:", e)
+        print("Erro ao testar conexão com Supabase:", e)
         return False
