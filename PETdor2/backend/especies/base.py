@@ -10,6 +10,7 @@ class Pergunta:
     texto: str
     escala: str
     peso: float = 1.0
+    invertida: bool = False   # ✅ ADICIONADO
 
 
 @dataclass
@@ -40,4 +41,3 @@ class EspecieConfig:
             ],
             "limites_dor": self.limites_dor,
         }
-
