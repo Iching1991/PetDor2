@@ -1,17 +1,23 @@
 # backend/auth/__init__.py
 
 from .user import (
-    criar_usuario,
+    cadastrar_usuario,
     buscar_usuario_por_email,
-    autenticar_usuario,
+    verificar_credenciais,
     atualizar_usuario,
+    atualizar_status_usuario,
+    redefinir_senha,
+    marcar_email_como_confirmado,
     deletar_usuario,
 )
 
 __all__ = [
-    "criar_usuario",
+    "cadastrar_usuario",
     "buscar_usuario_por_email",
-    "autenticar_usuario",
+    "verificar_credenciais",
     "atualizar_usuario",
+    "atualizar_status_usuario",
+    "redefinir_senha",
+    "marcar_email_como_confirmado",
     "deletar_usuario",
 ]
