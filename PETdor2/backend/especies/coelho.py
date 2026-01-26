@@ -5,37 +5,101 @@
 Escala: 0 a 7 — baseada no Rabbit Grimace Scale e parâmetros comportamentais.
 """
 
-# --------------------------------------------------------------
-# 🚨 IMPORTAÇÃO CORRIGIDA (Antes estava from .index ❌)
-# --------------------------------------------------------------
-from .base import EspecieConfig, Pergunta
+from .base import EspecieConfig, Categoria, Pergunta
 
 
 CONFIG_COELHO = EspecieConfig(
+    id="coelho",
     nome="Coelho",
-    especie_id="coelho",
-    descricao="Avaliação de dor em coelhos — Escala de 0 (nunca) a 7 (sempre).",
-    opcoes_escala=[
-        "0 - Nunca", "1 - Raramente", "2 - Às vezes", "3 - Frequentemente",
-        "4 - Quase Sempre", "5 - Sempre", "6 - Muito Frequente", "7 - Constante"
-    ],
-    perguntas=[
+    categorias=[
+        # --------------------------------------------------
         # Postura e Movimentação
-        Pergunta(texto="Meu coelho está com postura anormal (curvado, imóvel)", invertida=False, peso=1.0),
-        Pergunta(texto="Meu coelho está menos ativo ou se movimenta pouco", invertida=False, peso=1.0),
-        Pergunta(texto="Meu coelho evita saltar ou explorar o ambiente", invertida=False, peso=1.0),
+        # --------------------------------------------------
+        Categoria(
+            id="postura_movimentacao",
+            nome="Postura e Movimentação",
+            perguntas=[
+                Pergunta(
+                    id="postura_anormal",
+                    texto="Meu coelho está com postura anormal (curvado ou imóvel)?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="menos_ativo",
+                    texto="Meu coelho está menos ativo ou se movimenta pouco?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="evita_saltar",
+                    texto="Meu coelho evita saltar ou explorar o ambiente?",
+                    escala="0-7",
+                ),
+            ],
+        ),
 
+        # --------------------------------------------------
         # Expressão Facial
-        Pergunta(texto="Meu coelho apresenta olhos semicerrados ou expressão tensa", invertida=False, peso=1.0),
-        Pergunta(texto="As bochechas ou nariz parecem tensos ou retraídos", invertida=False, peso=1.0),
+        # --------------------------------------------------
+        Categoria(
+            id="expressao_facial",
+            nome="Expressão Facial",
+            perguntas=[
+                Pergunta(
+                    id="olhos_semicerrados",
+                    texto="Meu coelho apresenta olhos semicerrados ou expressão tensa?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="tensao_facial",
+                    texto="As bochechas ou o nariz parecem tensos ou retraídos?",
+                    escala="0-7",
+                ),
+            ],
+        ),
 
+        # --------------------------------------------------
         # Alimentação e Higiene
-        Pergunta(texto="O apetite do meu coelho reduziu", invertida=False, peso=1.0),
-        Pergunta(texto="Meu coelho reduziu a ingestão de água", invertida=False, peso=1.0),
-        Pergunta(texto="Meu coelho está menos limpo ou parou de se lamber", invertida=False, peso=1.0),
+        # --------------------------------------------------
+        Categoria(
+            id="alimentacao_higiene",
+            nome="Alimentação e Higiene",
+            perguntas=[
+                Pergunta(
+                    id="apetite_reduzido",
+                    texto="O apetite do meu coelho reduziu?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="menos_agua",
+                    texto="Meu coelho reduziu a ingestão de água?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="menos_higiene",
+                    texto="Meu coelho está menos limpo ou parou de se lamber?",
+                    escala="0-7",
+                ),
+            ],
+        ),
 
+        # --------------------------------------------------
         # Comportamento e Interação
-        Pergunta(texto="Meu coelho se esconde mais do que o normal", invertida=False, peso=1.0),
-        Pergunta(texto="Meu coelho reage com dor quando tocado", invertida=False, peso=1.0),
-    ]
+        # --------------------------------------------------
+        Categoria(
+            id="comportamento_interacao",
+            nome="Comportamento e Interação",
+            perguntas=[
+                Pergunta(
+                    id="se_esconde",
+                    texto="Meu coelho se esconde mais do que o normal?",
+                    escala="0-7",
+                ),
+                Pergunta(
+                    id="reage_dor_toque",
+                    texto="Meu coelho reage com dor quando é tocado?",
+                    escala="0-7",
+                ),
+            ],
+        ),
+    ],
 )
