@@ -8,6 +8,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# ==========================================================
+# 🖥️ Render
+# ==========================================================
 
 def render():
     st.title("🏠 Página Inicial")
@@ -29,9 +32,14 @@ def render():
     # ------------------------------------------------------
     st.success(f"Bem-vindo(a), **{nome}**!")
     st.write(
-        "Este é o painel principal do **PETDor**. "
-        "Aqui você pode avaliar seus pets, acompanhar o histórico "
-        "e gerenciar sua conta."
+        """
+        Este é o painel principal do **PETDor**.
+
+        Aqui você pode:
+        - Avaliar a dor dos seus pets
+        - Consultar avaliações anteriores
+        - Gerenciar sua conta
+        """
     )
 
     st.divider()
@@ -44,11 +52,14 @@ def render():
     col1, col2 = st.columns(2)
 
     with col1:
-        st.write(f"📧 **E-mail:** {user_data.get('email', 'Não informado')}")
-        st.write(f"🌍 **País:** {user_data.get('pais', 'Não informado')}")
+        st.write(f"📧 **E-mail:** {user_data.get('email', '—')}")
+        st.write(f"🌍 **País:** {user_data.get('pais', '—')}")
 
     with col2:
-        st.write(f"👥 **Tipo de usuário:** {user_data.get('tipo_usuario', '-')}")
+        st.write(
+            f"👥 **Tipo de usuário:** "
+            f"{user_data.get('tipo_usuario', '-').title()}"
+        )
         st.write(
             f"📨 **E-mail confirmado:** "
             f"{'✅ Sim' if user_data.get('email_confirmado') else '❌ Não'}"
@@ -83,10 +94,21 @@ def render():
     # ------------------------------------------------------
     # 🚪 Logout
     # ------------------------------------------------------
-    if st.button("🚪 Sair da Conta", key="btn_logout_home"):
+    if st.button("🚪 Sair da Conta", key="logout_home"):
         st.session_state.clear()
         st.success("✅ Você saiu da conta com sucesso.")
         st.rerun()
+
+
+# ==========================================================
+# 🚀 Execução protegida (evita tela branca)
+# ==========================================================
+
+try:
+    render()
+except Exception as e:
+    st.error("❌ Erro inesperado ao carregar a página inicial.")
+    st.exception(e)
 
 
 __all__ = ["render"]
