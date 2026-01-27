@@ -57,4 +57,15 @@ def render():
             st.error(mensagem)
 
 
+# ============================================================
+# 🚀 EXECUÇÃO OBRIGATÓRIA
+# ============================================================
+
+try:
+    render()
+except Exception as e:
+    st.error("❌ Erro ao carregar a página de cadastro.")
+    st.exception(e)
+
+
 __all__ = ["render"]
