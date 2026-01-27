@@ -1,6 +1,7 @@
 """
 Página de histórico de avaliações do PETDor2
 Exibe todas as avaliações realizadas pelo usuário logado.
+Compatível com Supabase REST + RLS
 """
 
 import streamlit as st
@@ -17,12 +18,15 @@ from backend.database import (
 
 logger = logging.getLogger(__name__)
 
-
 # ==========================================================
-# Buscar avaliações do tutor
+# 📥 Buscar avaliações do tutor
 # ==========================================================
 
 def buscar_avaliacoes_tutor(tutor_id: str) -> List[Dict[str, Any]]:
+    """
+    Busca avaliações do usuário logado e
+    enriquece com dados do animal.
+    """
     try:
         avaliacoes = supabase_table_select(
             table="avaliacoes_dor",
@@ -33,7 +37,7 @@ def buscar_avaliacoes_tutor(tutor_id: str) -> List[Dict[str, Any]]:
         if not avaliacoes:
             return []
 
-        # Busca TODOS os animais do tutor (REST-safe)
+        # Busca todos os animais do tutor (REST-safe)
         animais = supabase_table_select(
             table="animais",
             filters={"tutor_id": tutor_id},
@@ -41,7 +45,6 @@ def buscar_avaliacoes_tutor(tutor_id: str) -> List[Dict[str, Any]]:
 
         animais_map = {a["id"]: a for a in animais}
 
-        # Enriquecer avaliações
         for a in avaliacoes:
             animal = animais_map.get(a.get("animal_id"), {})
             a["animal_nome"] = animal.get("nome", "Desconhecido")
@@ -49,13 +52,13 @@ def buscar_avaliacoes_tutor(tutor_id: str) -> List[Dict[str, Any]]:
 
         return avaliacoes
 
-    except Exception:
+    except Exception as e:
         logger.exception("Erro ao buscar histórico de avaliações")
         return []
 
 
 # ==========================================================
-# Deletar avaliação
+# 🗑️ Deletar avaliação
 # ==========================================================
 
 def deletar_avaliacao(avaliacao_id: str) -> bool:
@@ -70,18 +73,25 @@ def deletar_avaliacao(avaliacao_id: str) -> bool:
 
 
 # ==========================================================
-# Renderização
+# 🖥️ Renderização
 # ==========================================================
 
 def render():
     st.title("📊 Histórico de Avaliações")
 
+    # ------------------------------------------------------
+    # 🔐 Usuário logado
+    # ------------------------------------------------------
     usuario = st.session_state.get("user_data")
     if not usuario:
         st.warning("⚠️ Faça login para acessar seu histórico.")
         st.stop()
 
-    tutor_id = usuario["id"]
+    tutor_id = usuario.get("id")
+
+    # ------------------------------------------------------
+    # 📥 Carregar avaliações
+    # ------------------------------------------------------
     avaliacoes = buscar_avaliacoes_tutor(tutor_id)
 
     if not avaliacoes:
@@ -91,10 +101,13 @@ def render():
     st.success(f"✅ {len(avaliacoes)} avaliação(ões) encontrada(s)")
     st.divider()
 
+    # ------------------------------------------------------
+    # 📋 Lista de avaliações
+    # ------------------------------------------------------
     for aval in avaliacoes:
         aval_id = aval.get("id")
         criado_em = aval.get("criado_em")
-        pontuacao = aval.get("pontuacao_total", 0)
+        pontuacao = int(aval.get("pontuacao_total", 0))
         respostas = aval.get("respostas", {})
         animal_nome = aval.get("animal_nome")
         animal_especie = aval.get("animal_especie")
@@ -105,7 +118,7 @@ def render():
             data_formatada = str(criado_em)
 
         with st.expander(
-            f"🐾 {animal_nome} — {animal_especie} — {data_formatada} — Pontuação: {pontuacao}"
+            f"🐾 {animal_nome} — {animal_especie} — {data_formatada} — Dor: {pontuacao}"
         ):
             col1, col2 = st.columns(2)
 
@@ -120,20 +133,30 @@ def render():
                 st.progress(min(pontuacao / max_ref, 1.0))
 
             st.divider()
-            st.write("📝 **Respostas:**")
+
+            st.markdown("### 📝 Respostas")
             st.json(respostas)
 
             st.divider()
             col_del, col_exp = st.columns(2)
 
+            # -----------------------------
+            # 🗑️ Deletar
+            # -----------------------------
             with col_del:
-                if st.button("🗑️ Deletar avaliação", key=f"del_{aval_id}"):
+                if st.button(
+                    "🗑️ Deletar avaliação",
+                    key=f"del_{aval_id}",
+                ):
                     if deletar_avaliacao(aval_id):
                         st.success("Avaliação deletada com sucesso.")
                         st.rerun()
                     else:
                         st.error("Erro ao deletar avaliação.")
 
+            # -----------------------------
+            # 📥 Exportar JSON
+            # -----------------------------
             with col_exp:
                 json_data = json.dumps(
                     {
@@ -156,17 +179,29 @@ def render():
                 )
 
     # ------------------------------------------------------
-    # Resumo
+    # 📈 Resumo geral
     # ------------------------------------------------------
     st.divider()
     st.subheader("📈 Resumo Geral")
 
     total = len(avaliacoes)
-    media = sum(a.get("pontuacao_total", 0) for a in avaliacoes) / total
+    media = sum(
+        int(a.get("pontuacao_total", 0)) for a in avaliacoes
+    ) / total
 
     col1, col2 = st.columns(2)
     col1.metric("Total de Avaliações", total)
     col2.metric("Pontuação Média", f"{media:.1f}")
 
+
+# ==========================================================
+# 🚀 Execução protegida (evita tela branca)
+# ==========================================================
+
+try:
+    render()
+except Exception as e:
+    st.error("❌ Erro inesperado ao carregar o histórico.")
+    st.exception(e)
 
 __all__ = ["render"]
