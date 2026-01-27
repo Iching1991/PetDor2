@@ -8,9 +8,6 @@ import streamlit as st
 import logging
 from typing import Dict, Any, List
 
-# ============================================================
-# 🔧 IMPORTS DO BACKEND (PADRÃO FINAL)
-# ============================================================
 from backend.database import (
     supabase_table_select,
     supabase_table_insert,
@@ -59,7 +56,7 @@ def salvar_avaliacao(
                 "avaliador_id": avaliador_id,
                 "respostas": respostas,
                 "pontuacao_total": pontuacao_total,
-                "nivel_dor": str(pontuacao_total),  # simples por enquanto
+                "nivel_dor": str(pontuacao_total),
             },
         )
         return result is not None
@@ -74,9 +71,6 @@ def salvar_avaliacao(
 def render():
     st.title("📋 Avaliação de Dor")
 
-    # --------------------------------------------------------
-    # 🔐 Usuário logado
-    # --------------------------------------------------------
     usuario = st.session_state.get("user_data")
     if not usuario:
         st.warning("Você precisa estar logado.")
@@ -84,9 +78,6 @@ def render():
 
     tutor_id = usuario["id"]
 
-    # --------------------------------------------------------
-    # 🐾 Selecionar animal
-    # --------------------------------------------------------
     animais = carregar_animais_do_tutor(tutor_id)
 
     if not animais:
@@ -109,9 +100,6 @@ def render():
         st.warning("Esta espécie não possui categorias configuradas.")
         return
 
-    # --------------------------------------------------------
-    # 📋 Questionário por categoria
-    # --------------------------------------------------------
     st.subheader(f"🧪 Avaliação para {animal['nome']}")
 
     respostas: Dict[str, Any] = {}
@@ -120,15 +108,10 @@ def render():
     for categoria in categorias:
         st.markdown(f"### 🔹 {categoria['nome']}")
 
-        perguntas = categoria.get("perguntas", [])
-        if not perguntas:
-            st.info("Nenhuma pergunta nesta categoria.")
-            continue
-
-        for pergunta in perguntas:
+        for pergunta in categoria.get("perguntas", []):
             labels = get_escala_labels(pergunta["escala"])
 
-            key_radio = f"{animal['id']}_{categoria['nome']}_{pergunta['id']}"
+            key_radio = f"{animal['id']}_{categoria['id']}_{pergunta['id']}"
 
             escolha = st.radio(
                 pergunta["texto"],
@@ -137,19 +120,12 @@ def render():
             )
 
             respostas[pergunta["id"]] = escolha
-
-            try:
-                pontuacao_total += labels.index(escolha)
-            except ValueError:
-                pass
+            pontuacao_total += labels.index(escolha)
 
         st.divider()
 
     st.metric("Pontuação Total", pontuacao_total)
 
-    # --------------------------------------------------------
-    # 💾 Salvar avaliação
-    # --------------------------------------------------------
     if st.button("💾 Salvar Avaliação"):
         sucesso = salvar_avaliacao(
             animal_id=animal["id"],
@@ -163,5 +139,15 @@ def render():
             st.rerun()
         else:
             st.error("Erro ao salvar avaliação.")
+
+# ============================================================
+# 🚀 EXECUÇÃO OBRIGATÓRIA
+# ============================================================
+
+try:
+    render()
+except Exception as e:
+    st.error("❌ Erro ao carregar a página de avaliação.")
+    st.exception(e)
 
 __all__ = ["render"]
