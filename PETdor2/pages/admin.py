@@ -8,9 +8,6 @@ import pandas as pd
 import logging
 from datetime import datetime
 
-# ============================================================
-# 🔧 IMPORTS DO BACKEND (PADRÃO FINAL)
-# ============================================================
 from backend.database import (
     supabase_table_select,
     supabase_table_update,
@@ -80,75 +77,74 @@ def render():
 
         if not usuarios:
             st.info("Nenhum usuário cadastrado.")
-            return
+        else:
+            st.metric("Total de Usuários", len(usuarios))
+            st.divider()
 
-        st.metric("Total de Usuários", len(usuarios))
-        st.divider()
+            tipos_validos = ["tutor", "veterinario", "clinica", "admin"]
 
-        tipos_validos = ["tutor", "veterinario", "clinica", "admin"]
+            for u in usuarios:
+                uid = u["id"]
 
-        for u in usuarios:
-            uid = u["id"]
+                with st.expander(f"👤 {u['nome']} ({u['email']})"):
+                    col1, col2 = st.columns([2, 1])
 
-            with st.expander(f"👤 {u['nome']} ({u['email']})"):
-                col1, col2 = st.columns([2, 1])
+                    with col1:
+                        st.write(f"**País:** {u.get('pais', '-')}")
+                        st.write(f"**Criado em:** {u.get('criado_em', '-')}")
+                        st.write("**Email confirmado:**", "✅" if u["email_confirmado"] else "❌")
+                        st.write("**Admin:**", "👑 Sim" if u["is_admin"] else "Não")
+                        st.write("**Ativo:**", "✅" if u["ativo"] else "❌")
 
-                with col1:
-                    st.write(f"**País:** {u.get('pais', '-')}")
-                    st.write(f"**Criado em:** {u.get('criado_em', '-')}")
-                    st.write("**Email confirmado:**", "✅" if u["email_confirmado"] else "❌")
-                    st.write("**Admin:**", "👑 Sim" if u["is_admin"] else "Não")
-                    st.write("**Ativo:**", "✅" if u["ativo"] else "❌")
+                    with col2:
+                        tipo_atual = u.get("tipo_usuario", "tutor")
 
-                with col2:
-                    tipo_atual = u.get("tipo_usuario", "tutor")
-
-                    novo_tipo = st.selectbox(
-                        "Tipo de usuário",
-                        tipos_validos,
-                        index=tipos_validos.index(tipo_atual) if tipo_atual in tipos_validos else 0,
-                        key=f"tipo_{uid}"
-                    )
-
-                    novo_admin = st.checkbox(
-                        "Administrador",
-                        value=u["is_admin"],
-                        key=f"admin_{uid}"
-                    )
-
-                    if st.button("💾 Salvar", key=f"save_{uid}"):
-                        atualizado = supabase_table_update(
-                            table="usuarios",
-                            filters={"id": uid},
-                            data={
-                                "tipo_usuario": novo_tipo,
-                                "is_admin": novo_admin
-                            }
+                        novo_tipo = st.selectbox(
+                            "Tipo de usuário",
+                            tipos_validos,
+                            index=tipos_validos.index(tipo_atual) if tipo_atual in tipos_validos else 0,
+                            key=f"tipo_{uid}"
                         )
 
-                        if atualizado is not None:
-                            st.success("Usuário atualizado com sucesso.")
-                            st.rerun()
-                        else:
-                            st.error("Erro ao atualizar usuário.")
-
-                    st.divider()
-
-                    if st.button(
-                        "🔒 Desativar" if u["ativo"] else "🔓 Ativar",
-                        key=f"status_{uid}"
-                    ):
-                        atualizado = supabase_table_update(
-                            table="usuarios",
-                            filters={"id": uid},
-                            data={"ativo": not u["ativo"]}
+                        novo_admin = st.checkbox(
+                            "Administrador",
+                            value=u["is_admin"],
+                            key=f"admin_{uid}"
                         )
 
-                        if atualizado is not None:
-                            st.success("Status atualizado.")
-                            st.rerun()
-                        else:
-                            st.error("Erro ao atualizar status.")
+                        if st.button("💾 Salvar", key=f"save_{uid}"):
+                            atualizado = supabase_table_update(
+                                table="usuarios",
+                                filters={"id": uid},
+                                data={
+                                    "tipo_usuario": novo_tipo,
+                                    "is_admin": novo_admin
+                                }
+                            )
+
+                            if atualizado is not None:
+                                st.success("Usuário atualizado com sucesso.")
+                                st.rerun()
+                            else:
+                                st.error("Erro ao atualizar usuário.")
+
+                        st.divider()
+
+                        if st.button(
+                            "🔒 Desativar" if u["ativo"] else "🔓 Ativar",
+                            key=f"status_{uid}"
+                        ):
+                            atualizado = supabase_table_update(
+                                table="usuarios",
+                                filters={"id": uid},
+                                data={"ativo": not u["ativo"]}
+                            )
+
+                            if atualizado is not None:
+                                st.success("Status atualizado.")
+                                st.rerun()
+                            else:
+                                st.error("Erro ao atualizar status.")
 
     # ========================================================
     # 🐾 ANIMAIS
@@ -175,10 +171,7 @@ def render():
             st.metric("Total de Avaliações", len(df))
 
             if "pontuacao_total" in df.columns:
-                st.metric(
-                    "Dor Média",
-                    f"{df['pontuacao_total'].mean():.1f}"
-                )
+                st.metric("Dor Média", f"{df['pontuacao_total'].mean():.1f}")
 
             st.dataframe(df, use_container_width=True)
 
@@ -197,4 +190,12 @@ def render():
                 st.error("Falha na conexão ❌")
 
 
-__all__ = ["render"]
+# ============================================================
+# 🚀 EXECUÇÃO OBRIGATÓRIA (SEM ISSO A PÁGINA FICA EM BRANCO)
+# ============================================================
+
+try:
+    render()
+except Exception as e:
+    st.error("❌ Erro ao carregar o painel administrativo.")
+    st.exception(e)
