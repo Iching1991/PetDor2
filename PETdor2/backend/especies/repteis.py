@@ -2,21 +2,30 @@
 
 """
 🦎 Configuração de avaliação para RÉPTEIS
-⚠ Em construção — avaliação especializada ainda não disponível.
+⚠ Avaliação ainda em desenvolvimento
+Compatível com MODELO COMPLETO (Opção A)
 """
 
-# --------------------------------------------------------------
-# 🚨 IMPORTAÇÃO CORRIGIDA (Antes estava from especies.index ❌)
-# --------------------------------------------------------------
-from .base import EspecieConfig, Pergunta
+from .base import EspecieConfig, Categoria, Pergunta
 
 
 CONFIG_REPTEIS = EspecieConfig(
+    id="repteis",
     nome="Répteis",
-    especie_id="repteis", # <-- Adicionado o campo especie_id aqui!
-    descricao="Avaliação de dor em répteis — Em construção.",
-    opcoes_escala=["0 - Em desenvolvimento"],
-    perguntas=[
-        Pergunta(texto="Avaliação para esta espécie ainda está em desenvolvimento.", invertida=False, peso=0.0)
-    ]
-) # <-- PARÊNTESE FINAL ADICIONADO AQUI!
+    categorias=[
+        Categoria(
+            id="em_desenvolvimento",
+            nome="Avaliação em desenvolvimento",
+            perguntas=[
+                Pergunta(
+                    id="avaliacao_indisponivel",
+                    texto="A avaliação de dor para répteis ainda está em desenvolvimento.",
+                    escala="0-0",
+                    peso=0.0,
+                )
+            ],
+        )
+    ],
+)
+
+__all__ = ["CONFIG_REPTEIS"]
