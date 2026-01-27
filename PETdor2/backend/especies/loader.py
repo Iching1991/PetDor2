@@ -2,24 +2,48 @@
 
 """
 Módulo para carregar e gerenciar dados de espécies.
+Camada de acesso (facade) para o backend.
 """
-# -------------------------------------------------------------------
-# A importação de .index está correta, pois get_especies_nomes reside lá.
-# O importante é garantir que o index.py seja executado (importado)
-# em algum ponto do app para que as espécies sejam registradas.
-# -------------------------------------------------------------------
-from .index import get_especies_nomes
+
+from .index import (
+    listar_especies as _listar_especies,
+    get_especies_nomes,
+    get_especies_ids,
+    buscar_especie_por_id,
+)
 
 
 def listar_especies():
     """
-    Retorna uma lista de nomes de espécies disponíveis para seleção.
+    Retorna a lista completa de espécies (configs).
+    """
+    return _listar_especies()
+
+
+def listar_nomes_especies():
+    """
+    Retorna apenas os nomes das espécies (para selects simples).
     """
     return get_especies_nomes()
 
-# Exemplo de uso (opcional, para testes)
-if __name__ == "__main__":
-    # Para que este teste funcione, o index.py precisa ter sido executado
-    # e registrado as espécies. Em um ambiente de app, a importação
-    # do pacote backend.especies já cuidaria disso.
-    print("Espécies listadas pelo loader:", listar_especies())
+
+def listar_ids_especies():
+    """
+    Retorna apenas os IDs das espécies.
+    """
+    return get_especies_ids()
+
+
+def obter_especie(especie_id: str):
+    """
+    Retorna a configuração completa de uma espécie.
+    """
+    return buscar_especie_por_id(especie_id)
+
+
+__all__ = [
+    "listar_especies",
+    "listar_nomes_especies",
+    "listar_ids_especies",
+    "obter_especie",
+]
