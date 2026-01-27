@@ -8,6 +8,10 @@ import streamlit as st
 import logging
 from typing import List, Dict, Any, Optional
 
+# ==========================================================
+# 🔧 IMPORTS DO BACKEND
+# ==========================================================
+
 from backend.database import (
     supabase_table_insert,
     supabase_table_select,
@@ -17,7 +21,7 @@ from backend.especies.index import listar_especies
 logger = logging.getLogger(__name__)
 
 # ==========================================================
-# Helpers
+# 🐾 FUNÇÕES DE DADOS
 # ==========================================================
 
 def cadastrar_pet(
@@ -27,7 +31,7 @@ def cadastrar_pet(
     raca: Optional[str],
     peso: Optional[float],
 ) -> bool:
-    """Insere um novo pet no banco."""
+    """Cadastra um novo pet no banco de dados."""
     try:
         result = supabase_table_insert(
             table="animais",
@@ -42,12 +46,12 @@ def cadastrar_pet(
         )
         return result is not None
     except Exception as e:
-        logger.error(f"Erro ao cadastrar pet: {e}", exc_info=True)
+        logger.error("Erro ao cadastrar pet", exc_info=True)
         return False
 
 
 def listar_pets_do_tutor(tutor_id: str) -> List[Dict[str, Any]]:
-    """Lista pets do tutor logado."""
+    """Lista todos os pets ativos do tutor logado."""
     try:
         return supabase_table_select(
             table="animais",
@@ -58,45 +62,41 @@ def listar_pets_do_tutor(tutor_id: str) -> List[Dict[str, Any]]:
             order="nome.asc",
         ) or []
     except Exception as e:
-        logger.error(f"Erro ao listar pets: {e}", exc_info=True)
+        logger.error("Erro ao listar pets", exc_info=True)
         return []
 
-
 # ==========================================================
-# Render
+# 🖥️ RENDERIZAÇÃO DA PÁGINA
 # ==========================================================
 
 def render():
     st.title("🐾 Cadastro de Pet")
 
+    # ------------------------------------------------------
+    # 🔐 Verificação de login
+    # ------------------------------------------------------
     usuario = st.session_state.get("user_data")
     if not usuario:
-        st.warning("Você precisa estar logado para cadastrar pets.")
+        st.warning("⚠️ Você precisa estar logado para cadastrar pets.")
         st.stop()
 
     tutor_id = usuario["id"]
 
     # ------------------------------------------------------
-    # Cadastro
+    # 📋 Cadastro de novo pet
     # ------------------------------------------------------
     st.subheader("Cadastrar novo pet")
 
     especies = listar_especies()
     if not especies:
-        st.error("Nenhuma espécie configurada no sistema.")
-        return
+        st.error("❌ Nenhuma espécie configurada no sistema.")
+        st.stop()
 
-    especies_map = {
-        f"{e['nome']}": e["id"]
-        for e in especies
-    }
+    especies_map = {e["nome"]: e["id"] for e in especies}
 
-    with st.form("form_cadastro_pet"):
+    with st.form("form_cadastro_pet", clear_on_submit=True):
         nome = st.text_input("Nome do pet")
-        especie_nome = st.selectbox(
-            "Espécie",
-            list(especies_map.keys()),
-        )
+        especie_nome = st.selectbox("Espécie", list(especies_map.keys()))
         raca = st.text_input("Raça (opcional)")
         peso = st.number_input(
             "Peso (kg)",
@@ -105,29 +105,28 @@ def render():
             format="%.1f",
         )
 
-        submitted = st.form_submit_button("Cadastrar Pet")
+        submitted = st.form_submit_button("🐶 Cadastrar Pet")
 
     if submitted:
-        if not nome:
+        if not nome.strip():
             st.error("❌ Informe o nome do pet.")
-            return
-
-        sucesso = cadastrar_pet(
-            tutor_id=tutor_id,
-            nome=nome.strip(),
-            especie_id=especies_map[especie_nome],
-            raca=raca.strip() or None,
-            peso=peso if peso > 0 else None,
-        )
-
-        if sucesso:
-            st.success(f"✅ Pet **{nome}** cadastrado com sucesso!")
-            st.rerun()
         else:
-            st.error("❌ Erro ao cadastrar o pet.")
+            sucesso = cadastrar_pet(
+                tutor_id=tutor_id,
+                nome=nome.strip(),
+                especie_id=especies_map[especie_nome],
+                raca=raca.strip() or None,
+                peso=peso if peso > 0 else None,
+            )
+
+            if sucesso:
+                st.success(f"✅ Pet **{nome}** cadastrado com sucesso!")
+                st.rerun()
+            else:
+                st.error("❌ Erro ao cadastrar o pet.")
 
     # ------------------------------------------------------
-    # Lista
+    # 📑 Lista de pets cadastrados
     # ------------------------------------------------------
     st.divider()
     st.subheader("Seus pets cadastrados")
@@ -147,5 +146,14 @@ def render():
                 else "**Peso:** Não informado"
             )
 
+# ==========================================================
+# 🚀 EXECUÇÃO SEGURA (EVITA TELA BRANCA)
+# ==========================================================
+
+try:
+    render()
+except Exception as e:
+    st.error("❌ Erro ao carregar a página de cadastro de pets.")
+    st.exception(e)
 
 __all__ = ["render"]
