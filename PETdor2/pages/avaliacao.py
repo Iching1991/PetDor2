@@ -34,12 +34,15 @@ def carregar_animais_do_tutor(tutor_id: str) -> List[Dict[str, Any]]:
             order="nome.asc",
         ) or []
     except Exception as e:
-        logger.error(f"Erro ao carregar animais do tutor {tutor_id}: {e}", exc_info=True)
+        logger.error(
+            f"Erro ao carregar animais do tutor {tutor_id}: {e}",
+            exc_info=True
+        )
         st.error("Erro ao carregar seus animais.")
         return []
 
 # ============================================================
-# 💾 Salvar avaliação
+# 💾 Salvar avaliação (REFATORADO)
 # ============================================================
 
 def salvar_avaliacao(
@@ -49,6 +52,24 @@ def salvar_avaliacao(
     pontuacao_total: int,
 ) -> bool:
     try:
+        # ----------------------------------------------------
+        # 🔢 Cálculo da pontuação percentual
+        # ----------------------------------------------------
+        total_perguntas = len(respostas)
+        max_por_pergunta = 7  # escala 0–7
+
+        if total_perguntas == 0:
+            pontuacao_percentual = 0.0
+        else:
+            pontuacao_maxima = total_perguntas * max_por_pergunta
+            pontuacao_percentual = round(
+                (pontuacao_total / pontuacao_maxima) * 100,
+                2
+            )
+
+        # ----------------------------------------------------
+        # 📤 Insert no Supabase
+        # ----------------------------------------------------
         result = supabase_table_insert(
             table="avaliacoes_dor",
             data={
@@ -56,12 +77,18 @@ def salvar_avaliacao(
                 "avaliador_id": avaliador_id,
                 "respostas": respostas,
                 "pontuacao_total": pontuacao_total,
+                "pontuacao_percentual": pontuacao_percentual,
                 "nivel_dor": str(pontuacao_total),
             },
         )
+
         return result is not None
+
     except Exception as e:
-        logger.error(f"Erro ao salvar avaliação: {e}", exc_info=True)
+        logger.error(
+            f"Erro ao salvar avaliação: {e}",
+            exc_info=True
+        )
         return False
 
 # ============================================================
@@ -71,6 +98,9 @@ def salvar_avaliacao(
 def render():
     st.title("📋 Avaliação de Dor")
 
+    # --------------------------------------------------------
+    # 🔐 Usuário logado
+    # --------------------------------------------------------
     usuario = st.session_state.get("user_data")
     if not usuario:
         st.warning("Você precisa estar logado.")
@@ -78,6 +108,9 @@ def render():
 
     tutor_id = usuario["id"]
 
+    # --------------------------------------------------------
+    # 🐾 Seleção do animal
+    # --------------------------------------------------------
     animais = carregar_animais_do_tutor(tutor_id)
 
     if not animais:
@@ -100,6 +133,9 @@ def render():
         st.warning("Esta espécie não possui categorias configuradas.")
         return
 
+    # --------------------------------------------------------
+    # 📋 Questionário
+    # --------------------------------------------------------
     st.subheader(f"🧪 Avaliação para {animal['nome']}")
 
     respostas: Dict[str, Any] = {}
@@ -108,7 +144,11 @@ def render():
     for categoria in categorias:
         st.markdown(f"### 🔹 {categoria['nome']}")
 
-        for pergunta in categoria.get("perguntas", []):
+        perguntas = categoria.get("perguntas", [])
+        if not perguntas:
+            continue
+
+        for pergunta in perguntas:
             labels = get_escala_labels(pergunta["escala"])
 
             key_radio = f"{animal['id']}_{categoria['id']}_{pergunta['id']}"
@@ -117,15 +157,33 @@ def render():
                 pergunta["texto"],
                 labels,
                 key=key_radio,
+                horizontal=True,
             )
 
             respostas[pergunta["id"]] = escolha
-            pontuacao_total += labels.index(escolha)
+
+            try:
+                pontuacao_total += labels.index(escolha)
+            except ValueError:
+                pass
 
         st.divider()
 
+    # --------------------------------------------------------
+    # 📊 Resultado
+    # --------------------------------------------------------
     st.metric("Pontuação Total", pontuacao_total)
 
+    if respostas:
+        percentual = round(
+            (pontuacao_total / (len(respostas) * 7)) * 100,
+            2
+        )
+        st.metric("Percentual de Dor", f"{percentual}%")
+
+    # --------------------------------------------------------
+    # 💾 Salvar
+    # --------------------------------------------------------
     if st.button("💾 Salvar Avaliação"):
         sucesso = salvar_avaliacao(
             animal_id=animal["id"],
@@ -141,7 +199,7 @@ def render():
             st.error("Erro ao salvar avaliação.")
 
 # ============================================================
-# 🚀 EXECUÇÃO OBRIGATÓRIA
+# 🚀 Execução protegida
 # ============================================================
 
 try:
