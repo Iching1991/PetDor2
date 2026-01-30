@@ -73,21 +73,29 @@ def gerar_pdf_avaliacao(avaliacao: Dict[str, Any]) -> bytes:
     styles = getSampleStyleSheet()
     elements = []
 
-    elements.append(Paragraph("<b>PETDor – Relatório de Avaliação de Dor</b>", styles["Title"]))
+    elements.append(Paragraph("PETDor – Relatório de Avaliação de Dor", styles["Title"]))
     elements.append(Spacer(1, 12))
 
     elements.append(Paragraph(f"<b>Animal:</b> {avaliacao['animal_nome']}", styles["Normal"]))
     elements.append(Paragraph(f"<b>Espécie:</b> {avaliacao['animal_especie']}", styles["Normal"]))
-    elements.append(Paragraph(f"<b>Data:</b> {avaliacao['criado_em']}", styles["Normal"]))
+    elements.append(
+        Paragraph(
+            f"<b>Data:</b> {pd.to_datetime(avaliacao['criado_em']).strftime('%d/%m/%Y %H:%M')}",
+            styles["Normal"],
+        )
+    )
     elements.append(Paragraph(f"<b>Pontuação Total:</b> {avaliacao['pontuacao_total']}", styles["Normal"]))
     elements.append(Spacer(1, 12))
 
-    elements.append(Paragraph("<b>Respostas:</b>", styles["Heading2"]))
+    elements.append(Paragraph("Respostas:", styles["Heading2"]))
     elements.append(Spacer(1, 6))
 
     for pergunta, resposta in avaliacao.get("respostas", {}).items():
         elements.append(
-            Paragraph(f"- {pergunta.replace('_', ' ').title()}: <b>{resposta}</b>", styles["Normal"])
+            Paragraph(
+                f"- {pergunta.replace('_', ' ').title()}: <b>{resposta}</b>",
+                styles["Normal"],
+            )
         )
 
     doc.build(elements)
@@ -120,9 +128,11 @@ def render():
     st.title("📊 Histórico de Avaliações")
 
     usuario = st.session_state.get("user_data")
+
+    # ⚠️ NÃO usar st.stop antes de renderizar algo
     if not usuario:
-        st.warning("Faça login para acessar.")
-        st.stop()
+        st.warning("Você precisa estar logado para acessar esta página.")
+        return
 
     usuario_id = usuario["id"]
     is_admin = bool(usuario.get("is_admin"))
@@ -135,19 +145,18 @@ def render():
 
     for aval in avaliacoes:
         aval_id = aval["id"]
-        data = pd.to_datetime(aval["criado_em"]).strftime("%d/%m/%Y %H:%M")
+
+        data_formatada = pd.to_datetime(aval["criado_em"]).strftime("%d/%m/%Y %H:%M")
 
         with st.expander(
-            f"🐾 {aval['animal_nome']} — {aval['animal_especie']} — {data} — Dor: {aval['pontuacao_total']}"
+            f"🐾 {aval['animal_nome']} — {aval['animal_especie']} — {data_formatada} — Dor: {aval['pontuacao_total']}"
         ):
             st.metric("Pontuação de Dor", aval["pontuacao_total"])
             st.json(aval["respostas"])
 
             col1, col2 = st.columns(2)
 
-            # -----------------------------
             # PDF
-            # -----------------------------
             with col1:
                 pdf = gerar_pdf_avaliacao(aval)
                 st.download_button(
@@ -157,9 +166,7 @@ def render():
                     mime="application/pdf",
                 )
 
-            # -----------------------------
             # Delete (admin only)
-            # -----------------------------
             with col2:
                 if is_admin:
                     if st.button("🗑️ Deletar avaliação", key=f"del_{aval_id}"):
@@ -170,6 +177,17 @@ def render():
                             st.error("Erro ao deletar.")
                 else:
                     st.info("🔒 Apenas administradores podem deletar.")
+
+
+# ==========================================================
+# 🚀 EXECUÇÃO AUTOMÁTICA (ESSENCIAL)
+# ==========================================================
+
+try:
+    render()
+except Exception as e:
+    st.error("❌ Erro ao carregar o histórico de avaliações.")
+    st.exception(e)
 
 
 __all__ = ["render"]
