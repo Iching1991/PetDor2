@@ -1,15 +1,20 @@
 """
 Página de histórico de avaliações do PETDor2
-Exibe todas as avaliações realizadas pelo usuário logado.
-Compatível com Supabase REST + RLS
+Exibe avaliações do usuário logado.
+Exportação em PDF.
+Deleção permitida apenas para administradores.
 """
 
 import streamlit as st
 import pandas as pd
 import logging
-import json
 from datetime import datetime
 from typing import List, Dict, Any
+from io import BytesIO
+
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib.pagesizes import A4
 
 from backend.database import (
     supabase_table_select,
@@ -19,28 +24,20 @@ from backend.database import (
 logger = logging.getLogger(__name__)
 
 # ==========================================================
-# 📥 Buscar avaliações do tutor
+# Buscar avaliações
 # ==========================================================
 
-def buscar_avaliacoes_tutor(tutor_id: str) -> List[Dict[str, Any]]:
-    """
-    Busca avaliações do usuário logado e
-    enriquece com dados do animal.
-    """
+def buscar_avaliacoes_usuario(usuario_id: str) -> List[Dict[str, Any]]:
     try:
         avaliacoes = supabase_table_select(
             table="avaliacoes_dor",
-            filters={"avaliador_id": tutor_id},
+            filters={"avaliador_id": usuario_id},
             order="criado_em.desc",
         ) or []
 
-        if not avaliacoes:
-            return []
-
-        # Busca todos os animais do tutor (REST-safe)
         animais = supabase_table_select(
             table="animais",
-            filters={"tutor_id": tutor_id},
+            filters={"tutor_id": usuario_id},
         ) or []
 
         animais_map = {a["id"]: a for a in animais}
@@ -52,13 +49,56 @@ def buscar_avaliacoes_tutor(tutor_id: str) -> List[Dict[str, Any]]:
 
         return avaliacoes
 
-    except Exception as e:
-        logger.exception("Erro ao buscar histórico de avaliações")
+    except Exception:
+        logger.exception("Erro ao buscar avaliações")
         return []
 
 
 # ==========================================================
-# 🗑️ Deletar avaliação
+# PDF
+# ==========================================================
+
+def gerar_pdf_avaliacao(avaliacao: Dict[str, Any]) -> bytes:
+    buffer = BytesIO()
+
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=A4,
+        rightMargin=40,
+        leftMargin=40,
+        topMargin=40,
+        bottomMargin=40,
+    )
+
+    styles = getSampleStyleSheet()
+    elements = []
+
+    elements.append(Paragraph("<b>PETDor – Relatório de Avaliação de Dor</b>", styles["Title"]))
+    elements.append(Spacer(1, 12))
+
+    elements.append(Paragraph(f"<b>Animal:</b> {avaliacao['animal_nome']}", styles["Normal"]))
+    elements.append(Paragraph(f"<b>Espécie:</b> {avaliacao['animal_especie']}", styles["Normal"]))
+    elements.append(Paragraph(f"<b>Data:</b> {avaliacao['criado_em']}", styles["Normal"]))
+    elements.append(Paragraph(f"<b>Pontuação Total:</b> {avaliacao['pontuacao_total']}", styles["Normal"]))
+    elements.append(Spacer(1, 12))
+
+    elements.append(Paragraph("<b>Respostas:</b>", styles["Heading2"]))
+    elements.append(Spacer(1, 6))
+
+    for pergunta, resposta in avaliacao.get("respostas", {}).items():
+        elements.append(
+            Paragraph(f"- {pergunta.replace('_', ' ').title()}: <b>{resposta}</b>", styles["Normal"])
+        )
+
+    doc.build(elements)
+    pdf = buffer.getvalue()
+    buffer.close()
+
+    return pdf
+
+
+# ==========================================================
+# Delete (admin)
 # ==========================================================
 
 def deletar_avaliacao(avaliacao_id: str) -> bool:
@@ -73,135 +113,63 @@ def deletar_avaliacao(avaliacao_id: str) -> bool:
 
 
 # ==========================================================
-# 🖥️ Renderização
+# Render
 # ==========================================================
 
 def render():
     st.title("📊 Histórico de Avaliações")
 
-    # ------------------------------------------------------
-    # 🔐 Usuário logado
-    # ------------------------------------------------------
     usuario = st.session_state.get("user_data")
     if not usuario:
-        st.warning("⚠️ Faça login para acessar seu histórico.")
+        st.warning("Faça login para acessar.")
         st.stop()
 
-    tutor_id = usuario.get("id")
+    usuario_id = usuario["id"]
+    is_admin = bool(usuario.get("is_admin"))
 
-    # ------------------------------------------------------
-    # 📥 Carregar avaliações
-    # ------------------------------------------------------
-    avaliacoes = buscar_avaliacoes_tutor(tutor_id)
+    avaliacoes = buscar_avaliacoes_usuario(usuario_id)
 
     if not avaliacoes:
-        st.info("📭 Você ainda não registrou avaliações.")
+        st.info("Nenhuma avaliação encontrada.")
         return
 
-    st.success(f"✅ {len(avaliacoes)} avaliação(ões) encontrada(s)")
-    st.divider()
-
-    # ------------------------------------------------------
-    # 📋 Lista de avaliações
-    # ------------------------------------------------------
     for aval in avaliacoes:
-        aval_id = aval.get("id")
-        criado_em = aval.get("criado_em")
-        pontuacao = int(aval.get("pontuacao_total", 0))
-        respostas = aval.get("respostas", {})
-        animal_nome = aval.get("animal_nome")
-        animal_especie = aval.get("animal_especie")
-
-        try:
-            data_formatada = pd.to_datetime(criado_em).strftime("%d/%m/%Y %H:%M")
-        except Exception:
-            data_formatada = str(criado_em)
+        aval_id = aval["id"]
+        data = pd.to_datetime(aval["criado_em"]).strftime("%d/%m/%Y %H:%M")
 
         with st.expander(
-            f"🐾 {animal_nome} — {animal_especie} — {data_formatada} — Dor: {pontuacao}"
+            f"🐾 {aval['animal_nome']} — {aval['animal_especie']} — {data} — Dor: {aval['pontuacao_total']}"
         ):
+            st.metric("Pontuação de Dor", aval["pontuacao_total"])
+            st.json(aval["respostas"])
+
             col1, col2 = st.columns(2)
 
+            # -----------------------------
+            # PDF
+            # -----------------------------
             with col1:
-                st.write(f"📅 **Data:** {data_formatada}")
-                st.write(f"🐾 **Animal:** {animal_nome}")
-                st.write(f"🏷️ **Espécie:** {animal_especie}")
-
-            with col2:
-                st.write(f"🧮 **Pontuação de Dor:** {pontuacao}")
-                max_ref = max(pontuacao, 10)
-                st.progress(min(pontuacao / max_ref, 1.0))
-
-            st.divider()
-
-            st.markdown("### 📝 Respostas")
-            st.json(respostas)
-
-            st.divider()
-            col_del, col_exp = st.columns(2)
-
-            # -----------------------------
-            # 🗑️ Deletar
-            # -----------------------------
-            with col_del:
-                if st.button(
-                    "🗑️ Deletar avaliação",
-                    key=f"del_{aval_id}",
-                ):
-                    if deletar_avaliacao(aval_id):
-                        st.success("Avaliação deletada com sucesso.")
-                        st.rerun()
-                    else:
-                        st.error("Erro ao deletar avaliação.")
-
-            # -----------------------------
-            # 📥 Exportar JSON
-            # -----------------------------
-            with col_exp:
-                json_data = json.dumps(
-                    {
-                        "avaliacao_id": aval_id,
-                        "animal": f"{animal_nome} ({animal_especie})",
-                        "data": data_formatada,
-                        "pontuacao_total": pontuacao,
-                        "respostas": respostas,
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                )
-
+                pdf = gerar_pdf_avaliacao(aval)
                 st.download_button(
-                    label="📥 Exportar JSON",
-                    data=json_data,
-                    file_name=f"avaliacao_{aval_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                    mime="application/json",
-                    key=f"export_{aval_id}",
+                    label="📄 Exportar PDF",
+                    data=pdf,
+                    file_name=f"avaliacao_{aval_id}.pdf",
+                    mime="application/pdf",
                 )
 
-    # ------------------------------------------------------
-    # 📈 Resumo geral
-    # ------------------------------------------------------
-    st.divider()
-    st.subheader("📈 Resumo Geral")
+            # -----------------------------
+            # Delete (admin only)
+            # -----------------------------
+            with col2:
+                if is_admin:
+                    if st.button("🗑️ Deletar avaliação", key=f"del_{aval_id}"):
+                        if deletar_avaliacao(aval_id):
+                            st.success("Avaliação deletada.")
+                            st.rerun()
+                        else:
+                            st.error("Erro ao deletar.")
+                else:
+                    st.info("🔒 Apenas administradores podem deletar.")
 
-    total = len(avaliacoes)
-    media = sum(
-        int(a.get("pontuacao_total", 0)) for a in avaliacoes
-    ) / total
-
-    col1, col2 = st.columns(2)
-    col1.metric("Total de Avaliações", total)
-    col2.metric("Pontuação Média", f"{media:.1f}")
-
-
-# ==========================================================
-# 🚀 Execução protegida (evita tela branca)
-# ==========================================================
-
-try:
-    render()
-except Exception as e:
-    st.error("❌ Erro inesperado ao carregar o histórico.")
-    st.exception(e)
 
 __all__ = ["render"]
