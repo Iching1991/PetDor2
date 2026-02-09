@@ -1,7 +1,7 @@
 import requests
 import streamlit as st
 
-RESEND_API_URL = "https://api.resend.com/emails"
+RESEND_URL = "https://api.resend.com/emails"
 
 
 def enviar_email(destinatario: str, assunto: str, html: str) -> bool:
@@ -21,17 +21,16 @@ def enviar_email(destinatario: str, assunto: str, html: str) -> bool:
             "Content-Type": "application/json",
         }
 
-        r = requests.post(
-            RESEND_API_URL,
+        response = requests.post(
+            RESEND_URL,
             json=payload,
             headers=headers,
             timeout=10,
         )
 
-        r.raise_for_status()
+        response.raise_for_status()
         return True
 
     except Exception as e:
-        print("❌ Erro ao enviar e-mail:", e)
+        print("❌ ERRO AO ENVIAR E-MAIL:", e)
         return False
-
