@@ -6,7 +6,8 @@ from typing import Tuple, Optional, Dict, Any
 import streamlit as st
 import logging
 
-from backend.supabase_client import supabase
+
+from backend.database.supabase_client import supabase
 from backend.database import supabase_table_select, supabase_table_insert
 
 logger = logging.getLogger(__name__)
@@ -308,3 +309,4 @@ def obter_usuario_atual() -> Optional[Dict[str, Any]]:
     except Exception as e:
         logger.exception("❌ Erro ao obter usuário atual")
         return None
+
