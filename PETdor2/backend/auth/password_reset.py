@@ -1,75 +1,49 @@
 """
-Reset de senha - PETDor2
-Compatível com Supabase Auth
-SEM import circular
+Reset de senha via Supabase Auth
 """
 
-from typing import Tuple
 import streamlit as st
 import logging
+from backend.database.supabase_client import supabase
 
 logger = logging.getLogger(__name__)
 
-# ==========================================================
-# 🔐 Solicitar reset
-# ==========================================================
-def solicitar_reset_senha(email: str) -> Tuple[bool, str]:
-    """
-    Envia e-mail de redefinição via Supabase Auth
-    """
 
-    from backend.database.supabase_client import supabase
+# ==========================================================
+# Solicitar reset
+# ==========================================================
+def solicitar_reset_senha(email: str):
 
     try:
-        email = email.lower().strip()
-
-        if not email:
-            return False, "Informe um e-mail válido."
-
-        logger.info(f"🔄 Reset solicitado: {email}")
-
         supabase.auth.reset_password_email(
             email,
             options={
-                "redirect_to": (
-                    st.secrets["app"]["STREAMLIT_APP_URL"]
-                    + "/redefinir_senha"
-                )
-            }
+                "redirect_to": st.secrets["app"]["STREAMLIT_APP_URL"]
+                + "/redefinir_senha"
+            },
         )
 
-        return True, (
-            "Se o e-mail estiver cadastrado, "
-            "você receberá instruções."
-        )
+        return True, "Link enviado para seu e-mail."
 
     except Exception as e:
-        logger.exception("Erro ao solicitar reset")
-        return False, f"Erro: {e}"
+        logger.exception("Erro reset senha")
+        return False, str(e)
 
 
 # ==========================================================
-# 🔑 Redefinir senha (token ativo)
+# Redefinir senha
 # ==========================================================
-def redefinir_senha(nova_senha: str) -> Tuple[bool, str]:
-    """
-    Redefine senha do usuário autenticado pelo token
-    """
-
-    from backend.database.supabase_client import supabase
+def redefinir_senha(nova_senha: str):
 
     try:
-        if len(nova_senha) < 6:
-            return False, "Senha deve ter pelo menos 6 caracteres."
-
-        supabase.auth.update_user({
-            "password": nova_senha
-        })
-
-        logger.info("✅ Senha redefinida")
+        supabase.auth.update_user(
+            {
+                "password": nova_senha
+            }
+        )
 
         return True, "Senha redefinida com sucesso."
 
     except Exception as e:
         logger.exception("Erro redefinir senha")
-        return False, f"Erro: {e}"
+        return False, str(e)
