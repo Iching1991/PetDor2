@@ -1,23 +1,11 @@
 # backend/auth/__init__.py
-
-from .user import (
-    cadastrar_usuario,
-    buscar_usuario_por_email,
-    verificar_credenciais,
-    atualizar_usuario,
-    atualizar_status_usuario,
-    redefinir_senha,
-    marcar_email_como_confirmado,
-    deletar_usuario,
-)
+"""
+Auth module - PETDor2
+Inicialização leve
+"""
 
 __all__ = [
-    "cadastrar_usuario",
-    "buscar_usuario_por_email",
-    "verificar_credenciais",
-    "atualizar_usuario",
-    "atualizar_status_usuario",
-    "redefinir_senha",
-    "marcar_email_como_confirmado",
-    "deletar_usuario",
+    "user",
+    "password_reset",
+    "email_confirmation",
 ]
