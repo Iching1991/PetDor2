@@ -1,80 +1,75 @@
-from supabase import create_client
+"""
+Reset de senha - PETDor2
+Compatível com Supabase Auth
+SEM import circular
+"""
+
+from typing import Tuple
 import streamlit as st
-from typing import Tuple
+import logging
 
-supabase = create_client(
-    st.secrets["supabase"]["SUPABASE_URL"],
-    st.secrets["supabase"]["SUPABASE_KEY"]
-)
+logger = logging.getLogger(__name__)
 
+# ==========================================================
+# 🔐 Solicitar reset
+# ==========================================================
 def solicitar_reset_senha(email: str) -> Tuple[bool, str]:
+    """
+    Envia e-mail de redefinição via Supabase Auth
+    """
+
+    from backend.database.supabase_client import supabase
+
     try:
-        supabase.auth.reset_password_for_email(
+        email = email.lower().strip()
+
+        if not email:
+            return False, "Informe um e-mail válido."
+
+        logger.info(f"🔄 Reset solicitado: {email}")
+
+        supabase.auth.reset_password_email(
             email,
-            {"redirect_to": "https://petdor.streamlit.app/resetar_senha"}
+            options={
+                "redirect_to": (
+                    st.secrets["app"]["STREAMLIT_APP_URL"]
+                    + "/redefinir_senha"
+                )
+            }
         )
-        return True, "Se o e-mail existir, o link foi enviado."
+
+        return True, (
+            "Se o e-mail estiver cadastrado, "
+            "você receberá instruções."
+        )
+
     except Exception as e:
-        return False, str(e)
-
-import uuid
-from typing import Tuple
-
-from backend.database import supabase_table_select, supabase_table_update
-from backend.email.service import enviar_email
-from backend.email.templates import template_reset_senha
-from backend.auth.user import hash_senha
+        logger.exception("Erro ao solicitar reset")
+        return False, f"Erro: {e}"
 
 
-def solicitar_reset_senha(email: str) -> Tuple[bool, str]:
-    email = email.lower().strip()
+# ==========================================================
+# 🔑 Redefinir senha (token ativo)
+# ==========================================================
+def redefinir_senha(nova_senha: str) -> Tuple[bool, str]:
+    """
+    Redefine senha do usuário autenticado pelo token
+    """
 
-    usuario = supabase_table_select(
-        table="usuarios",
-        filters={"email": email},
-        limit=1,
-    )
+    from backend.database.supabase_client import supabase
 
-    if not usuario:
-        return True, "Se o e-mail existir, enviaremos um link."
+    try:
+        if len(nova_senha) < 6:
+            return False, "Senha deve ter pelo menos 6 caracteres."
 
-    usuario = usuario[0]
-    token = str(uuid.uuid4())
+        supabase.auth.update_user({
+            "password": nova_senha
+        })
 
-    supabase_table_update(
-        table="usuarios",
-        filters={"id": usuario["id"]},
-        data={"password_reset_token": token},
-    )
+        logger.info("✅ Senha redefinida")
 
-    enviar_email(
-        destinatario=email,
-        assunto="Redefinição de senha – PETDor",
-        html=template_reset_senha(usuario["nome"], token),
-    )
+        return True, "Senha redefinida com sucesso."
 
-    return True, "Se o e-mail existir, enviaremos um link."
-
-
-def redefinir_senha(token: str, nova_senha: str) -> Tuple[bool, str]:
-    usuario = supabase_table_select(
-        table="usuarios",
-        filters={"password_reset_token": token},
-        limit=1,
-    )
-
-    if not usuario:
-        return False, "Token inválido ou expirado."
-
-    usuario = usuario[0]
-
-    supabase_table_update(
-        table="usuarios",
-        filters={"id": usuario["id"]},
-        data={
-            "senha_hash": hash_senha(nova_senha),
-            "password_reset_token": None,
-        },
-    )
-
-    return True, "Senha alterada com sucesso."
+    except Exception as e:
+        logger.exception("Erro redefinir senha")
+        return False, f"Erro: {e}"
