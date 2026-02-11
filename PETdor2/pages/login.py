@@ -1,6 +1,5 @@
 """
 Página de Login - PETDor2
-Com recuperação de senha integrada
 """
 
 import streamlit as st
@@ -12,47 +11,56 @@ from backend.utils.validators import validar_email
 logger = logging.getLogger(__name__)
 
 
-# ==========================================================
-# Render
-# ==========================================================
-
 def render():
 
-    st.title("🔐 Login")
+    try:
+        st.title("🔐 Login PETDor")
 
-    # ------------------------------------------------------
-    # Já logado
-    # ------------------------------------------------------
-    if st.session_state.get("user_data"):
-        st.success("✅ Você já está logado.")
+        # -----------------------------
+        # Já logado
+        # -----------------------------
+        if st.session_state.get("user_data"):
+            st.success("Você já está logado.")
 
-        if st.button("🏠 Ir para Página Inicial"):
-            st.session_state.pagina = "home"
-            st.rerun()
+            if st.button("Ir para Home"):
+                st.session_state.pagina = "home"
+                st.rerun()
 
-        return
+            return
 
-    # ------------------------------------------------------
-    # Formulário
-    # ------------------------------------------------------
-    with st.form("form_login"):
+        # -----------------------------
+        # Formulário
+        # -----------------------------
+        with st.form("form_login"):
 
-        email = st.text_input("📧 E-mail").strip().lower()
-        senha = st.text_input("🔑 Senha", type="password")
+            email = st.text_input("📧 E-mail")
+            senha = st.text_input("🔑 Senha", type="password")
 
-        entrar = st.form_submit_button("Entrar")
+            entrar = st.form_submit_button("Entrar")
 
-    # ------------------------------------------------------
-    # Login
-    # ------------------------------------------------------
-    if entrar:
+        # -----------------------------
+        # Botões extras
+        # -----------------------------
+        col1, col2 = st.columns(2)
 
-        if not email or not senha:
-            st.error("❌ Preencha e-mail e senha.")
+        with col1:
+            if st.button("🔑 Esqueci minha senha"):
+                st.session_state.pagina = "recuperar_senha"
+                st.rerun()
+
+        with col2:
+            if st.button("📝 Criar conta"):
+                st.session_state.pagina = "cadastro"
+                st.rerun()
+
+        # -----------------------------
+        # Login
+        # -----------------------------
+        if not entrar:
             return
 
         if not validar_email(email):
-            st.error("❌ E-mail inválido.")
+            st.error("E-mail inválido.")
             return
 
         sucesso, msg, usuario = fazer_login(email, senha)
@@ -61,29 +69,15 @@ def render():
             st.error(msg)
             return
 
-        # Sessão
-        st.session_state["user_data"] = usuario
-        st.session_state["pagina"] = "home"
+        st.session_state.user_data = usuario
+        st.session_state.pagina = "home"
 
-        st.success("✅ Login realizado com sucesso!")
+        st.success("Login realizado com sucesso!")
         st.rerun()
 
-    # ------------------------------------------------------
-    # Recuperação de senha
-    # ------------------------------------------------------
-    st.divider()
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if st.button("🔑 Esqueci minha senha"):
-            st.session_state.pagina = "recuperar_senha"
-            st.rerun()
-
-    with col2:
-        if st.button("📝 Criar conta"):
-            st.session_state.pagina = "cadastro"
-            st.rerun()
+    except Exception as e:
+        st.error("Erro ao carregar página de login.")
+        st.exception(e)
 
 
 __all__ = ["render"]
