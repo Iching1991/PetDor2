@@ -1,6 +1,6 @@
 """
-🔐 Página de Login — PETDor2
-Autenticação via Supabase Auth + Perfil na tabela usuarios
+Página de Login - PETDor2
+Com recuperação de senha integrada
 """
 
 import streamlit as st
@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 # ==========================================================
 # Render
 # ==========================================================
+
 def render():
 
     st.title("🔐 Login")
@@ -23,84 +24,66 @@ def render():
     # Já logado
     # ------------------------------------------------------
     if st.session_state.get("user_data"):
-        st.success("Você já está logado.")
-        st.page_link("pages/home.py", label="Ir para Home")
+        st.success("✅ Você já está logado.")
+
+        if st.button("🏠 Ir para Página Inicial"):
+            st.session_state.pagina = "home"
+            st.rerun()
+
         return
 
     # ------------------------------------------------------
     # Formulário
     # ------------------------------------------------------
-    with st.form("form_login", clear_on_submit=False):
+    with st.form("form_login"):
 
-        email = st.text_input(
-            "E-mail",
-            placeholder="seu@email.com",
-        ).strip().lower()
+        email = st.text_input("📧 E-mail").strip().lower()
+        senha = st.text_input("🔑 Senha", type="password")
 
-        senha = st.text_input(
-            "Senha",
-            type="password",
-            placeholder="Digite sua senha",
-        )
-
-        entrar = st.form_submit_button(
-            "Entrar",
-            use_container_width=True
-        )
-
-    if not entrar:
-        return
-
-    # ------------------------------------------------------
-    # Validações
-    # ------------------------------------------------------
-    if not validar_email(email):
-        st.error("❌ E-mail inválido.")
-        return
-
-    if not senha:
-        st.error("❌ Digite sua senha.")
-        return
+        entrar = st.form_submit_button("Entrar")
 
     # ------------------------------------------------------
     # Login
     # ------------------------------------------------------
-    with st.spinner("Autenticando..."):
+    if entrar:
+
+        if not email or not senha:
+            st.error("❌ Preencha e-mail e senha.")
+            return
+
+        if not validar_email(email):
+            st.error("❌ E-mail inválido.")
+            return
 
         sucesso, msg, usuario = fazer_login(email, senha)
 
-    if not sucesso:
-
-        if "confirmar" in msg.lower():
-            st.warning(msg)
-            st.page_link(
-                "pages/confirmar_email.py",
-                label="📧 Confirmar e-mail",
-            )
-        else:
+        if not sucesso:
             st.error(msg)
+            return
 
-        return
+        # Sessão
+        st.session_state["user_data"] = usuario
+        st.session_state["pagina"] = "home"
+
+        st.success("✅ Login realizado com sucesso!")
+        st.rerun()
 
     # ------------------------------------------------------
-    # Sessão
+    # Recuperação de senha
     # ------------------------------------------------------
-    st.session_state["user_data"] = usuario
-    st.session_state["usuario_id"] = usuario["id"]
-    st.session_state["is_admin"] = usuario.get("is_admin", False)
+    st.divider()
 
-    logger.info(f"✅ Login efetuado: {email}")
+    col1, col2 = st.columns(2)
 
-    st.success("Login realizado com sucesso!")
+    with col1:
+        if st.button("🔑 Esqueci minha senha"):
+            st.session_state.pagina = "recuperar_senha"
+            st.rerun()
 
-    st.rerun()
+    with col2:
+        if st.button("📝 Criar conta"):
+            st.session_state.pagina = "cadastro"
+            st.rerun()
 
 
-# ==========================================================
-# Execução obrigatória
-# ==========================================================
-try:
-    render()
-except Exception as e:
-    st.error("Erro ao carregar página de login.")
-    st.exception(e)
+__all__ = ["render"]
