@@ -1,48 +1,35 @@
-"""
-Página de redefinição de senha
-Via Supabase Auth session recovery
-"""
-
 import streamlit as st
-import logging
-
 from backend.auth.password_reset import redefinir_senha
-
-logger = logging.getLogger(__name__)
 
 
 def render():
 
-    try:
-        st.title("🔐 Redefinir Senha")
+    st.title("🔐 Redefinir Senha")
 
-        nova = st.text_input("Nova senha", type="password")
-        confirmar = st.text_input("Confirmar senha", type="password")
+    nova = st.text_input("Nova senha", type="password")
+    confirmar = st.text_input("Confirmar senha", type="password")
 
-        if st.button("Alterar senha"):
+    if st.button("Alterar senha"):
 
-            if not nova or not confirmar:
-                st.warning("Preencha os campos.")
-                return
+        if not nova or not confirmar:
+            st.warning("Preencha os campos.")
+            return
 
-            if nova != confirmar:
-                st.error("Senhas não coincidem.")
-                return
+        if nova != confirmar:
+            st.error("Senhas não coincidem.")
+            return
 
-            sucesso, msg = redefinir_senha(nova)
+        sucesso, msg = redefinir_senha(nova)
 
-            if sucesso:
-                st.success("Senha redefinida com sucesso!")
+        if sucesso:
+            st.success("Senha redefinida com sucesso!")
 
-                if st.button("Ir para login"):
-                    st.session_state.pagina = "login"
-                    st.rerun()
-            else:
-                st.error(msg)
-
-    except Exception as e:
-        st.error("Erro ao redefinir senha.")
-        st.exception(e)
+            if st.button("Ir para login"):
+                st.session_state.pagina = "login"
+                st.rerun()
+        else:
+            st.error(msg)
 
 
-__all__ = ["render"]
+# ⚠️ EXECUÇÃO DIRETA
+render()
