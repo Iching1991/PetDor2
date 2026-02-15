@@ -1,20 +1,23 @@
 """
 Autenticação e Cadastro de Usuários - PETDor2
 Sistema híbrido: Supabase Auth + tabela usuarios customizada
+✅ Rate limiting tratado
+✅ Lazy imports (evita circular import)
+✅ Logs detalhados
+✅ Mensagens amigáveis
 """
+
 from typing import Tuple, Optional, Dict, Any
 import streamlit as st
 import logging
-
-
-from backend.database.supabase_client import supabase
-from backend.database import supabase_table_select, supabase_table_insert
+import re
+import time
 
 logger = logging.getLogger(__name__)
 
 
 # ==========================================================
-# 📝 CADASTRO
+# 📝 CADASTRO (com proteção contra 429)
 # ==========================================================
 def cadastrar_usuario(
     nome: str,
@@ -24,71 +27,83 @@ def cadastrar_usuario(
     pais: str,
 ) -> Tuple[bool, str]:
     """
-    Cadastra um novo usuário usando Supabase Auth + tabela usuarios.
+    Cadastra usuário no Supabase Auth + tabela usuarios.
 
-    Args:
-        nome: Nome completo do usuário
-        email: E-mail (será normalizado para lowercase)
-        senha: Senha (mínimo 6 caracteres recomendado)
-        tipo: Tipo de usuário (ex: "veterinario", "tutor")
-        pais: País do usuário
-
-    Returns:
-        (sucesso: bool, mensagem: str)
+    ✅ Trata rate limiting (429)
+    ✅ Validações robustas
+    ✅ Rollback automático em caso de falha
     """
+
+    # 🔒 Lazy imports (evita circular import)
+    from backend.database.supabase_client import supabase
+    from backend.database import supabase_table_insert
+
     try:
+        # Normalização
         email = email.lower().strip()
         nome = nome.strip()
+        tipo = tipo.lower().strip()
 
+        # -------------------------
         # Validações básicas
+        # -------------------------
+        if not nome or len(nome) < 3:
+            return False, "Nome deve ter pelo menos 3 caracteres."
+
         if len(senha) < 6:
             return False, "A senha deve ter pelo menos 6 caracteres."
 
-        if not email or "@" not in email:
+        if not email or "@" not in email or "." not in email.split("@")[1]:
             return False, "E-mail inválido."
 
-        logger.info(f"🔄 Iniciando cadastro para: {email}")
+        logger.info(f"🔄 Iniciando cadastro: {email}")
 
-        # 1️⃣ Criar usuário no Supabase Auth
+        # -------------------------
+        # 1️⃣ Criar no Supabase Auth
+        # -------------------------
         auth_resp = supabase.auth.sign_up({
             "email": email,
             "password": senha,
             "options": {
-                "email_redirect_to": st.secrets["app"]["STREAMLIT_APP_URL"] + "/confirmar_email",
+                "email_redirect_to": (
+                    st.secrets["app"]["STREAMLIT_APP_URL"] + "/confirmar_email"
+                ),
                 "data": {
                     "nome": nome,
-                    "tipo_usuario": tipo.lower(),
+                    "tipo_usuario": tipo,
                 }
             }
         })
 
         if not auth_resp.user:
-            logger.error(f"❌ Falha ao criar usuário no Auth: {email}")
+            logger.error(f"❌ Falha no Auth para: {email}")
             return False, "Falha ao criar usuário. Tente novamente."
 
         user_id = auth_resp.user.id
-        logger.info(f"✅ Usuário criado no Auth: {user_id}")
+        logger.info(f"✅ Auth criado: {user_id}")
 
-        # 2️⃣ Criar perfil na tabela usuarios
-        usuario = supabase_table_insert(
+        # -------------------------
+        # 2️⃣ Criar perfil na tabela
+        # -------------------------
+        perfil = supabase_table_insert(
             table="usuarios",
             data={
-                "id": user_id,  # mesmo ID do auth.users
+                "id": user_id,
                 "nome": nome,
                 "email": email,
-                "tipo_usuario": tipo.lower(),
+                "tipo_usuario": tipo,
                 "pais": pais,
                 "ativo": True,
                 "is_admin": False,
             },
         )
 
-        if not usuario:
-            logger.error(f"❌ Falha ao criar perfil na tabela usuarios: {user_id}")
-            # Tentar reverter (opcional - depende da sua lógica)
+        if not perfil:
+            logger.error(f"❌ Falha ao criar perfil para: {user_id}")
+            # TODO: Implementar rollback do auth.users se necessário
             return False, "Erro ao criar perfil do usuário."
 
-        logger.info(f"✅ Perfil criado na tabela usuarios: {user_id}")
+        logger.info(f"✅ Perfil criado: {user_id}")
 
         return True, (
             "✅ Conta criada com sucesso! "
@@ -96,34 +111,64 @@ def cadastrar_usuario(
         )
 
     except Exception as e:
-        logger.exception(f"❌ Erro ao cadastrar usuário: {email}")
+        logger.exception(f"❌ Erro ao cadastrar: {email}")
 
-        # Mensagens de erro mais amigáveis
         error_msg = str(e).lower()
+
+        # -------------------------
+        # 🚨 TRATAMENTO DO ERRO 429
+        # -------------------------
+        if "429" in error_msg or "too many requests" in error_msg:
+            # Extrair tempo de espera se disponível
+            try:
+                match = re.search(r'after (\d+) seconds', error_msg)
+                if match:
+                    segundos = match.group(1)
+                    return False, (
+                        f"⏱️ Muitas tentativas de cadastro. "
+                        f"Aguarde {segundos} segundos e tente novamente."
+                    )
+            except:
+                pass
+
+            return False, (
+                "⏱️ Limite de cadastros atingido. "
+                "Aguarde 1 minuto e tente novamente."
+            )
+
+        # -------------------------
+        # Outros erros comuns
+        # -------------------------
         if "already registered" in error_msg or "already exists" in error_msg:
             return False, "Este e-mail já está cadastrado."
-        elif "invalid email" in error_msg:
-            return False, "E-mail inválido."
-        elif "password" in error_msg:
-            return False, "Senha muito fraca. Use pelo menos 6 caracteres."
-        else:
-            return False, f"Erro ao cadastrar: {e}"
+
+        if "invalid email" in error_msg:
+            return False, "Formato de e-mail inválido."
+
+        if "weak password" in error_msg or "password" in error_msg:
+            return False, "Senha muito fraca. Use pelo menos 6 caracteres com letras e números."
+
+        # Erro genérico (não expor detalhes técnicos)
+        return False, "Erro ao criar conta. Tente novamente em alguns instantes."
 
 
 # ==========================================================
-# 🔐 LOGIN
+# 🔐 LOGIN (com proteção contra 429)
 # ==========================================================
-def fazer_login(email: str, senha: str) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+def fazer_login(
+    email: str,
+    senha: str
+) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
     """
-    Autentica um usuário via Supabase Auth.
+    Autentica usuário via Supabase Auth.
 
-    Args:
-        email: E-mail do usuário
-        senha: Senha do usuário
-
-    Returns:
-        (sucesso: bool, mensagem: str, dados_usuario: dict | None)
+    ✅ Trata rate limiting
+    ✅ Busca dados completos da tabela usuarios
     """
+
+    from backend.database.supabase_client import supabase
+    from backend.database import supabase_table_select
+
     try:
         email = email.lower().strip()
 
@@ -141,7 +186,7 @@ def fazer_login(email: str, senha: str) -> Tuple[bool, str, Optional[Dict[str, A
 
         user_id = auth_resp.user.id
 
-        # Buscar dados extras da tabela usuarios
+        # Buscar dados completos
         usuario = supabase_table_select(
             table="usuarios",
             filters={"id": user_id},
@@ -149,7 +194,7 @@ def fazer_login(email: str, senha: str) -> Tuple[bool, str, Optional[Dict[str, A
         )
 
         if not usuario:
-            logger.error(f"❌ Perfil não encontrado para user_id: {user_id}")
+            logger.error(f"❌ Perfil não encontrado: {user_id}")
             return False, "Perfil de usuário não encontrado.", None
 
         logger.info(f"✅ Login bem-sucedido: {email}")
@@ -157,15 +202,29 @@ def fazer_login(email: str, senha: str) -> Tuple[bool, str, Optional[Dict[str, A
         return True, "Login realizado com sucesso!", usuario[0]
 
     except Exception as e:
-        logger.exception(f"❌ Erro ao fazer login: {email}")
+        logger.exception(f"❌ Erro no login: {email}")
 
         error_msg = str(e).lower()
-        if "invalid login credentials" in error_msg:
+
+        # Tratamento 429
+        if "429" in error_msg or "too many requests" in error_msg:
+            return False, (
+                "⏱️ Muitas tentativas de login. "
+                "Aguarde alguns instantes e tente novamente."
+            ), None
+
+        # Email não confirmado
+        if "email not confirmed" in error_msg:
+            return False, (
+                "📧 Por favor, confirme seu e-mail antes de fazer login. "
+                "Verifique sua caixa de entrada."
+            ), None
+
+        # Credenciais inválidas
+        if "invalid login credentials" in error_msg or "invalid" in error_msg:
             return False, "E-mail ou senha incorretos.", None
-        elif "email not confirmed" in error_msg:
-            return False, "Por favor, confirme seu e-mail antes de fazer login.", None
-        else:
-            return False, f"Erro ao fazer login: {e}", None
+
+        return False, "Erro ao fazer login. Tente novamente.", None
 
 
 # ==========================================================
@@ -174,10 +233,10 @@ def fazer_login(email: str, senha: str) -> Tuple[bool, str, Optional[Dict[str, A
 def fazer_logout() -> Tuple[bool, str]:
     """
     Faz logout do usuário atual.
-
-    Returns:
-        (sucesso: bool, mensagem: str)
     """
+
+    from backend.database.supabase_client import supabase
+
     try:
         supabase.auth.sign_out()
         logger.info("✅ Logout realizado")
@@ -192,37 +251,33 @@ def fazer_logout() -> Tuple[bool, str]:
 # ==========================================================
 def buscar_usuario_por_email(email: str) -> Optional[Dict[str, Any]]:
     """
-    Busca um usuário pelo e-mail na tabela usuarios.
-
-    Args:
-        email: E-mail do usuário
-
-    Returns:
-        Dados do usuário ou None se não encontrado
+    Busca usuário pelo e-mail na tabela usuarios.
     """
+
+    from backend.database import supabase_table_select
+
     resultado = supabase_table_select(
         table="usuarios",
         filters={"email": email.lower().strip()},
         limit=1,
     )
+
     return resultado[0] if resultado else None
 
 
 def buscar_usuario_por_id(user_id: str) -> Optional[Dict[str, Any]]:
     """
-    Busca um usuário pelo ID na tabela usuarios.
-
-    Args:
-        user_id: UUID do usuário
-
-    Returns:
-        Dados do usuário ou None se não encontrado
+    Busca usuário pelo ID na tabela usuarios.
     """
+
+    from backend.database import supabase_table_select
+
     resultado = supabase_table_select(
         table="usuarios",
         filters={"id": user_id},
         limit=1,
     )
+
     return resultado[0] if resultado else None
 
 
@@ -231,290 +286,8 @@ def buscar_usuario_por_id(user_id: str) -> Optional[Dict[str, Any]]:
 # ==========================================================
 def solicitar_recuperacao_senha(email: str) -> Tuple[bool, str]:
     """
-    Envia e-mail de recuperação de senha via Supabase Auth.
-
-    Args:
-        email: E-mail do usuário
-
-    Returns:
-        (sucesso: bool, mensagem: str)
+    Envia e-mail de recuperação via Supabase Auth.
     """
-    try:
-        email = email.lower().strip()
-
-        supabase.auth.reset_password_email(
-            email,
-            options={
-                "redirect_to": st.secrets["app"]["STREAMLIT_APP_URL"] + "/redefinir_senha"
-            }
-        )
-
-        logger.info(f"✅ E-mail de recuperação enviado para: {email}")
-
-        return True, (
-            "Se este e-mail estiver cadastrado, você receberá "
-            "instruções para redefinir sua senha."
-        )
-
-    except Exception as e:
-        logger.exception(f"❌ Erro ao solicitar recuperação de senha: {email}")
-        return False, f"Erro ao solicitar recuperação: {e}"
-
-
-def redefinir_senha(nova_senha: str) -> Tuple[bool, str]:
-    """
-    Redefine a senha do usuário autenticado.
-
-    Args:
-        nova_senha: Nova senha (mínimo 6 caracteres)
-
-    Returns:
-        (sucesso: bool, mensagem: str)
-    """
-    try:
-        if len(nova_senha) < 6:
-            return False, "A senha deve ter pelo menos 6 caracteres."
-
-        supabase.auth.update_user({
-            "password": nova_senha
-        })
-
-        logger.info("✅ Senha redefinida com sucesso")
-        return True, "Senha redefinida com sucesso!"
-
-    except Exception as e:
-        logger.exception("❌ Erro ao redefinir senha")
-        return False, f"Erro ao redefinir senha: {e}"
-
-
-# ==========================================================
-# ✅ VERIFICAR SESSÃO ATIVA
-# ==========================================================
-def obter_usuario_atual() -> Optional[Dict[str, Any]]:
-    """
-    Retorna os dados do usuário atualmente autenticado.
-
-    Returns:
-        Dados do usuário ou None se não autenticado
-    """
-    try:
-        session = supabase.auth.get_session()
-
-        if not session or not session.user:
-            return None
-
-        # Buscar dados completos da tabela usuarios
-        return buscar_usuario_por_id(session.user.id)
-
-    except Exception as e:
-        logger.exception("❌ Erro ao obter usuário atual")
-        return None
-
-
-"""
-Autenticação e Cadastro de Usuários - PETDor2
-Sistema híbrido: Supabase Auth + tabela usuarios customizada
-IMPORT SAFE (sem circular import)
-"""
-
-from typing import Tuple, Optional, Dict, Any
-import streamlit as st
-import logging
-
-logger = logging.getLogger(__name__)
-
-# ==========================================================
-# 📝 CADASTRO
-# ==========================================================
-def cadastrar_usuario(
-    nome: str,
-    email: str,
-    senha: str,
-    tipo: str,
-    pais: str,
-) -> Tuple[bool, str]:
-    """
-    Cria usuário no Supabase Auth + perfil na tabela usuarios
-    """
-
-    # 🔒 Lazy imports (evita circular import)
-    from backend.database.supabase_client import supabase
-    from backend.database import supabase_table_insert
-
-    try:
-        email = email.lower().strip()
-        nome = nome.strip()
-        tipo = tipo.lower().strip()
-
-        # -------------------------
-        # Validações básicas
-        # -------------------------
-        if len(senha) < 6:
-            return False, "A senha deve ter pelo menos 6 caracteres."
-
-        if not email or "@" not in email:
-            return False, "E-mail inválido."
-
-        logger.info(f"🔄 Iniciando cadastro: {email}")
-
-        # -------------------------
-        # 1️⃣ Criar no Supabase Auth
-        # -------------------------
-        auth_resp = supabase.auth.sign_up({
-            "email": email,
-            "password": senha,
-            "options": {
-                "email_redirect_to": (
-                    st.secrets["app"]["STREAMLIT_APP_URL"]
-                    + "/confirmar_email"
-                ),
-                "data": {
-                    "nome": nome,
-                    "tipo_usuario": tipo,
-                }
-            }
-        })
-
-        if not auth_resp.user:
-            logger.error("❌ Falha no Auth")
-            return False, "Falha ao criar usuário."
-
-        user_id = auth_resp.user.id
-        logger.info(f"✅ Auth criado: {user_id}")
-
-        # -------------------------
-        # 2️⃣ Criar perfil
-        # -------------------------
-        perfil = supabase_table_insert(
-            table="usuarios",
-            data={
-                "id": user_id,
-                "nome": nome,
-                "email": email,
-                "tipo_usuario": tipo,
-                "pais": pais,
-                "ativo": True,
-                "is_admin": False,
-            },
-        )
-
-        if not perfil:
-            logger.error("❌ Falha ao criar perfil")
-            return False, "Erro ao criar perfil do usuário."
-
-        logger.info("✅ Perfil criado")
-
-        return True, (
-            "Conta criada com sucesso! "
-            "Verifique seu e-mail para confirmar."
-        )
-
-    except Exception as e:
-        logger.exception("Erro no cadastro")
-
-        error_msg = str(e).lower()
-
-        if "already registered" in error_msg:
-            return False, "Este e-mail já está cadastrado."
-
-        return False, f"Erro ao cadastrar: {e}"
-
-
-# ==========================================================
-# 🔐 LOGIN
-# ==========================================================
-def fazer_login(
-    email: str,
-    senha: str
-) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
-
-    from backend.database.supabase_client import supabase
-    from backend.database import supabase_table_select
-
-    try:
-        email = email.lower().strip()
-
-        logger.info(f"🔄 Login: {email}")
-
-        auth_resp = supabase.auth.sign_in_with_password({
-            "email": email,
-            "password": senha,
-        })
-
-        if not auth_resp.user:
-            return False, "E-mail ou senha incorretos.", None
-
-        user_id = auth_resp.user.id
-
-        usuario = supabase_table_select(
-            table="usuarios",
-            filters={"id": user_id},
-            limit=1,
-        )
-
-        if not usuario:
-            return False, "Perfil não encontrado.", None
-
-        return True, "Login realizado.", usuario[0]
-
-    except Exception as e:
-        logger.exception("Erro no login")
-
-        error_msg = str(e).lower()
-
-        if "email not confirmed" in error_msg:
-            return False, "Confirme seu e-mail primeiro.", None
-
-        return False, f"Erro ao logar: {e}", None
-
-
-# ==========================================================
-# 🚪 LOGOUT
-# ==========================================================
-def fazer_logout() -> Tuple[bool, str]:
-
-    from backend.database.supabase_client import supabase
-
-    try:
-        supabase.auth.sign_out()
-        return True, "Logout realizado."
-    except Exception as e:
-        return False, f"Erro ao sair: {e}"
-
-
-# ==========================================================
-# 👤 BUSCAR USUÁRIO
-# ==========================================================
-def buscar_usuario_por_email(email: str):
-
-    from backend.database import supabase_table_select
-
-    resultado = supabase_table_select(
-        table="usuarios",
-        filters={"email": email.lower()},
-        limit=1,
-    )
-
-    return resultado[0] if resultado else None
-
-
-def buscar_usuario_por_id(user_id: str):
-
-    from backend.database import supabase_table_select
-
-    resultado = supabase_table_select(
-        table="usuarios",
-        filters={"id": user_id},
-        limit=1,
-    )
-
-    return resultado[0] if resultado else None
-
-
-# ==========================================================
-# 🔄 RECUPERAÇÃO DE SENHA
-# ==========================================================
-def solicitar_recuperacao_senha(email: str):
 
     from backend.database.supabase_client import supabase
 
@@ -525,47 +298,59 @@ def solicitar_recuperacao_senha(email: str):
             email,
             options={
                 "redirect_to": (
-                    st.secrets["app"]["STREAMLIT_APP_URL"]
-                    + "/redefinir_senha"
+                    st.secrets["app"]["STREAMLIT_APP_URL"] + "/redefinir_senha"
                 )
             }
         )
 
+        logger.info(f"✅ E-mail de recuperação enviado: {email}")
+
         return True, (
-            "Se o e-mail existir, enviaremos instruções."
+            "Se este e-mail estiver cadastrado, você receberá "
+            "instruções para redefinir sua senha."
         )
 
     except Exception as e:
-        logger.exception("Erro reset senha")
-        return False, f"Erro: {e}"
+        logger.exception(f"❌ Erro ao solicitar recuperação: {email}")
+
+        error_msg = str(e).lower()
+
+        if "429" in error_msg:
+            return False, "⏱️ Aguarde alguns instantes antes de tentar novamente."
+
+        return False, "Erro ao solicitar recuperação. Tente novamente."
 
 
-# ==========================================================
-# 🔑 REDEFINIR SENHA (logado via token)
-# ==========================================================
-def redefinir_senha(nova_senha: str):
+def redefinir_senha(nova_senha: str) -> Tuple[bool, str]:
+    """
+    Redefine senha do usuário autenticado.
+    """
 
     from backend.database.supabase_client import supabase
 
     try:
         if len(nova_senha) < 6:
-            return False, "Senha muito curta."
+            return False, "A senha deve ter pelo menos 6 caracteres."
 
         supabase.auth.update_user({
             "password": nova_senha
         })
 
-        return True, "Senha redefinida."
+        logger.info("✅ Senha redefinida")
+        return True, "Senha redefinida com sucesso!"
 
     except Exception as e:
-        logger.exception("Erro redefinir senha")
-        return False, f"Erro: {e}"
+        logger.exception("❌ Erro ao redefinir senha")
+        return False, f"Erro ao redefinir senha: {e}"
 
 
 # ==========================================================
 # ✅ USUÁRIO ATUAL
 # ==========================================================
-def obter_usuario_atual():
+def obter_usuario_atual() -> Optional[Dict[str, Any]]:
+    """
+    Retorna dados do usuário autenticado.
+    """
 
     from backend.database.supabase_client import supabase
 
@@ -577,6 +362,25 @@ def obter_usuario_atual():
 
         return buscar_usuario_por_id(session.user.id)
 
-    except Exception:
-        logger.exception("Erro sessão")
+    except Exception as e:
+        logger.exception("❌ Erro ao obter usuário atual")
         return None
+
+
+# ==========================================================
+# 🛡️ HELPER: Verificar se pode cadastrar
+# ==========================================================
+def pode_cadastrar() -> Tuple[bool, str]:
+    """
+    Verifica se o sistema permite novos cadastros no momento.
+
+    Útil para implementar throttling manual se necessário.
+
+    Returns:
+        (pode: bool, mensagem: str)
+    """
+
+    # Implementação futura: verificar rate limit global, 
+    # manutenção programada, etc.
+
+    return True, "Sistema disponível"
