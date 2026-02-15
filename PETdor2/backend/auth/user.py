@@ -4,13 +4,13 @@ Sistema híbrido: Supabase Auth + tabela usuarios customizada
 
 ✅ Proteção contra duplicatas
 ✅ Rate limiting tratado (429)
+✅ Email rate limit tratado
 ✅ Lazy imports (evita circular import)
 ✅ Logs detalhados
 ✅ Mensagens amigáveis
-✅ Rollback automático
 ✅ Validações robustas
 
-Autor: Inner AI
+Autor: Inner AI + Agnaldo
 Data: 2026-02-15
 """
 
@@ -35,12 +35,9 @@ def cadastrar_usuario(
     """
     Cadastra usuário no Supabase Auth + tabela usuarios.
 
-    Fluxo:
-    1. Valida dados de entrada
-    2. Verifica se e-mail já existe
-    3. Cria usuário no Supabase Auth
-    4. Verifica se perfil já existe (dupla verificação)
-    5. Cria perfil na tabela usuarios
+    ✅ Verifica duplicatas antes de criar
+    ✅ Trata 429 e email rate limit
+    ✅ Mensagens amigáveis
 
     Args:
         nome: Nome completo (mín. 3 caracteres)
@@ -172,10 +169,6 @@ def cadastrar_usuario(
 
         if not perfil:
             logger.error(f"❌ Falha ao criar perfil para: {user_id}")
-
-            # TODO: Implementar rollback do auth.users se necessário
-            # supabase.auth.admin.delete_user(user_id)
-
             return False, (
                 "Erro ao criar perfil do usuário. "
                 "Entre em contato com o suporte."
@@ -212,7 +205,15 @@ def cadastrar_usuario(
 
             return False, (
                 "⏱️ Limite de cadastros atingido. "
-                "Aguarde 1 minuto e tente novamente."
+                "Aguarde alguns minutos antes de tentar novamente."
+            )
+
+        # Email rate limit (específico do Supabase)
+        if "email rate limit exceeded" in error_msg:
+            return False, (
+                "⏱️ Limite de envio de e-mails atingido. "
+                "Aguarde 15 minutos antes de tentar novamente. "
+                "Se o problema persistir, entre em contato com o suporte."
             )
 
         # Duplicata (23505 - PostgreSQL)
@@ -254,11 +255,6 @@ def fazer_login(
     """
     Autentica usuário via Supabase Auth.
 
-    Fluxo:
-    1. Valida credenciais no Supabase Auth
-    2. Busca dados completos na tabela usuarios
-    3. Retorna dados do usuário
-
     Args:
         email: E-mail do usuário
         senha: Senha do usuário
@@ -275,9 +271,7 @@ def fazer_login(
 
         logger.info(f"🔄 Tentativa de login: {email}")
 
-        # -------------------------
-        # 1️⃣ AUTENTICAR NO AUTH
-        # -------------------------
+        # Autenticar no Auth
         auth_resp = supabase.auth.sign_in_with_password({
             "email": email,
             "password": senha,
@@ -289,9 +283,7 @@ def fazer_login(
 
         user_id = auth_resp.user.id
 
-        # -------------------------
-        # 2️⃣ BUSCAR DADOS COMPLETOS
-        # -------------------------
+        # Buscar dados completos
         usuario = supabase_table_select(
             table="usuarios",
             filters={"id": user_id},
@@ -321,10 +313,6 @@ def fazer_login(
         logger.exception(f"❌ Erro no login: {email}")
 
         error_msg = str(e).lower()
-
-        # -------------------------
-        # 🚨 TRATAMENTO DE ERROS
-        # -------------------------
 
         # Rate limiting
         if "429" in error_msg or "too many requests" in error_msg:
@@ -371,7 +359,7 @@ def fazer_logout() -> Tuple[bool, str]:
 
     except Exception as e:
         logger.exception("❌ Erro ao fazer logout")
-        return False, f"Erro ao fazer logout. Tente novamente."
+        return False, "Erro ao fazer logout. Tente novamente."
 
 
 # ==========================================================
@@ -464,7 +452,7 @@ def solicitar_recuperacao_senha(email: str) -> Tuple[bool, str]:
 
         logger.info(f"✅ E-mail de recuperação enviado: {email}")
 
-        # Mensagem genérica por segurança (não revelar se e-mail existe)
+        # Mensagem genérica por segurança
         return True, (
             "Se este e-mail estiver cadastrado, você receberá "
             "instruções para redefinir sua senha em alguns instantes."
@@ -477,9 +465,27 @@ def solicitar_recuperacao_senha(email: str) -> Tuple[bool, str]:
 
         # Rate limiting
         if "429" in error_msg or "too many requests" in error_msg:
+            try:
+                match = re.search(r'after (\d+) seconds', error_msg)
+                if match:
+                    segundos = match.group(1)
+                    return False, (
+                        f"⏱️ Muitas tentativas de recuperação. "
+                        f"Aguarde {segundos} segundos."
+                    )
+            except:
+                pass
+
             return False, (
-                "⏱️ Muitas tentativas. "
-                "Aguarde alguns instantes antes de tentar novamente."
+                "⏱️ Limite atingido. "
+                "Aguarde alguns minutos."
+            )
+
+        # Email rate limit
+        if "email rate limit exceeded" in error_msg:
+            return False, (
+                "⏱️ Limite de e-mails atingido. "
+                "Aguarde 15 minutos antes de tentar novamente."
             )
 
         return False, (
@@ -491,8 +497,6 @@ def solicitar_recuperacao_senha(email: str) -> Tuple[bool, str]:
 def redefinir_senha(nova_senha: str) -> Tuple[bool, str]:
     """
     Redefine senha do usuário autenticado.
-
-    Requer que o usuário esteja autenticado via token de recuperação.
 
     Args:
         nova_senha: Nova senha (mín. 6 caracteres)
@@ -534,9 +538,6 @@ def redefinir_senha(nova_senha: str) -> Tuple[bool, str]:
 def obter_usuario_atual() -> Optional[Dict[str, Any]]:
     """
     Retorna dados do usuário atualmente autenticado.
-
-    Verifica sessão ativa no Supabase Auth e busca dados completos
-    na tabela usuarios.
 
     Returns:
         Dados do usuário ou None se não autenticado
@@ -608,36 +609,17 @@ def e_admin() -> bool:
 
 
 # ==========================================================
-# 📧 REENVIAR E-MAIL DE CONFIRMAÇÃO
+# EXPORTS
 # ==========================================================
-def reenviar_email_confirmacao(email: str) -> Tuple[bool, str]:
-    """
-    Reenvia e-mail de confirmação para usuários não confirmados.
-
-    Args:
-        email: E-mail do usuário
-
-    Returns:
-        (sucesso: bool, mensagem: str)
-    """
-
-    from backend.database.supabase_client import supabase
-
-    try:
-        email = email.lower().strip()
-
-        if not email or "@" not in email:
-            return False, "E-mail inválido."
-
-        # Supabase não tem endpoint direto para reenvio
-        # Alternativa: usar reset_password_email ou sign_up novamente
-
-        # Por segurança, retornar mensagem genérica
-        return True, (
-            "Se este e-mail estiver cadastrado e não confirmado, "
-            "um novo e-mail de confirmação será enviado."
-        )
-
-    except Exception as e:
-        logger.exception(f"❌ Erro ao reenviar confirmação: {email}")
-        return False, "Erro ao reenviar e-mail. Tente novamente."
+__all__ = [
+    "cadastrar_usuario",
+    "fazer_login",
+    "fazer_logout",
+    "buscar_usuario_por_email",
+    "buscar_usuario_por_id",
+    "solicitar_recuperacao_senha",
+    "redefinir_senha",
+    "obter_usuario_atual",
+    "esta_autenticado",
+    "e_admin",
+]
