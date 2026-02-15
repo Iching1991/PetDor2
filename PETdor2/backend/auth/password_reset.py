@@ -1,6 +1,6 @@
 """
 Reset de senha via Supabase Auth — PETDor2
-Versão simples, mas com tratamento de 429 / email rate limit.
+✅ Proteção contra 429 e email rate limit
 """
 
 import streamlit as st
@@ -9,80 +9,98 @@ import re
 from typing import Tuple
 
 from backend.database.supabase_client import supabase
+from backend.auth.rate_limiter import (
+    verificar_rate_limit,
+    registrar_tentativa,
+    registrar_erro_429,
+    limpar_historico,
+)
 
 logger = logging.getLogger(__name__)
 
 
 # ==========================================================
-# 📧 SOLICITAR RESET DE SENHA
+# 📧 SOLICITAR RESET
 # ==========================================================
 def solicitar_reset_senha(email: str) -> Tuple[bool, str]:
     """
-    Envia e-mail de redefinição de senha via Supabase Auth.
+    Envia e-mail de recuperação.
 
     Returns:
         (sucesso: bool, mensagem: str)
     """
+
     try:
         email = email.strip().lower()
 
         if not email or "@" not in email:
             return False, "Informe um e-mail válido."
 
+        # Verificar rate limit LOCAL
+        pode, msg = verificar_rate_limit("recuperacao_senha", email)
+        if not pode:
+            return False, msg
+
+        # Registrar tentativa
+        registrar_tentativa("recuperacao_senha", email)
+
+        logger.info(f"🔄 Reset solicitado: {email}")
+
+        # Enviar e-mail
         redirect_url = (
-            st.secrets["app"]["STREAMLIT_APP_URL"]
-            + "/redefinir_senha"
+            st.secrets["app"]["STREAMLIT_APP_URL"] + "/redefinir_senha"
         )
 
         supabase.auth.reset_password_email(
             email,
-            options={
-                "redirect_to": redirect_url
-            },
+            options={"redirect_to": redirect_url}
         )
 
-        logger.info(f"📧 Reset de senha solicitado para: {email}")
+        logger.info(f"✅ E-mail enviado: {email}")
 
-        # Mensagem genérica (não revelar se e-mail existe ou não)
+        # Limpar histórico após sucesso
+        limpar_historico("recuperacao_senha", email)
+
         return True, (
             "Se o e-mail estiver cadastrado, você receberá "
             "um link para redefinir sua senha em alguns instantes."
         )
 
     except Exception as e:
-        logger.exception("❌ Erro ao solicitar reset de senha")
+        logger.exception(f"❌ Erro reset: {email}")
 
         error_msg = str(e).lower()
 
-        # 429 genérico
+        # DETECTAR 429
         if "429" in error_msg or "too many requests" in error_msg:
-            # tenta extrair segundos
+            registrar_erro_429("recuperacao_senha", email)
+
+            # Tentar extrair segundos
             try:
                 match = re.search(r'after (\d+) seconds', error_msg)
                 if match:
-                    segundos = match.group(1)
+                    seg = match.group(1)
                     return False, (
-                        f"⏱️ Muitas tentativas de recuperação. "
-                        f"Aguarde {segundos} segundos e tente novamente."
+                        f"⏱️ Muitas tentativas. "
+                        f"Aguarde {seg} segundos."
                     )
-            except Exception:
+            except:
                 pass
 
             return False, (
-                "⏱️ Limite de solicitações atingido. "
-                "Aguarde alguns minutos antes de tentar novamente."
+                "⏱️ Limite atingido. "
+                "Aguarde alguns minutos."
             )
 
-        # Limite de envio de e-mail
+        # DETECTAR EMAIL RATE LIMIT
         if "email rate limit exceeded" in error_msg:
+            registrar_erro_429("recuperacao_senha", email)
             return False, (
-                "⏱️ Limite de e-mails de recuperação atingido. "
-                "Aguarde alguns minutos antes de tentar novamente. "
-                "Se o problema persistir, entre em contato com o suporte."
+                "⏱️ Limite de e-mails atingido. "
+                "Aguarde 15 minutos antes de tentar novamente."
             )
 
-        # erro genérico
-        return False, "Erro ao solicitar recuperação. Tente novamente mais tarde."
+        return False, "Erro ao solicitar recuperação."
 
 
 # ==========================================================
@@ -90,53 +108,67 @@ def solicitar_reset_senha(email: str) -> Tuple[bool, str]:
 # ==========================================================
 def redefinir_senha(nova_senha: str) -> Tuple[bool, str]:
     """
-    Redefine a senha do usuário autenticado via token do Supabase.
+    Redefine senha do usuário autenticado.
 
     Returns:
         (sucesso: bool, mensagem: str)
     """
+
     try:
         if not nova_senha:
             return False, "Informe a nova senha."
 
         if len(nova_senha) < 6:
-            return False, "A senha deve ter pelo menos 6 caracteres."
+            return False, "Mínimo de 6 caracteres."
 
+        # Verificar rate limit
+        pode, msg = verificar_rate_limit("redefinir_senha")
+        if not pode:
+            return False, msg
+
+        # Registrar tentativa
+        registrar_tentativa("redefinir_senha")
+
+        # Verificar sessão
         session = supabase.auth.get_session()
 
         if not session or not session.user:
             return False, (
-                "Sessão inválida ou expirada. "
-                "Solicite um novo link de redefinição."
+                "Sessão inválida. "
+                "Solicite um novo link."
             )
 
+        # Atualizar senha
         supabase.auth.update_user({
             "password": nova_senha
         })
 
-        logger.info(f"✅ Senha redefinida para user_id={session.user.id}")
+        logger.info(f"✅ Senha redefinida: {session.user.id}")
+
+        # Limpar histórico
+        limpar_historico("redefinir_senha")
 
         return True, "Senha redefinida com sucesso!"
 
     except Exception as e:
-        logger.exception("❌ Erro ao redefinir senha")
+        logger.exception("❌ Erro redefinir")
 
         error_msg = str(e).lower()
 
-        if "weak password" in error_msg or "password" in error_msg:
-            return False, (
-                "Senha não atende aos requisitos de segurança. "
-                "Use pelo menos 6 caracteres com letras e números."
-            )
+        if "429" in error_msg:
+            registrar_erro_429("redefinir_senha")
+            return False, "⏱️ Aguarde antes de tentar."
 
-        if "429" in error_msg or "too many requests" in error_msg:
-            return False, (
-                "⏱️ Muitas tentativas de redefinição. "
-                "Aguarde um pouco antes de tentar novamente."
-            )
+        if "weak password" in error_msg:
+            return False, "Senha muito fraca."
 
-        return False, "Erro ao redefinir senha. Tente novamente mais tarde."
+        return False, "Erro ao redefinir senha."
 
 
 __all__ = ["solicitar_reset_senha", "redefinir_senha"]
+
+
+
+__all__ = ["solicitar_reset_senha", "redefinir_senha"]
+
 
