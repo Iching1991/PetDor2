@@ -3,6 +3,7 @@ Página de recuperação de senha - PETDor2
 
 ✅ Solicita envio de link de redefinição por e-mail
 ✅ Proteção contra rate limiting (429)
+✅ Tratamento de email rate limit
 ✅ Validações robustas
 ✅ Feedback visual aprimorado
 ✅ Compatível com Supabase Auth + RLS
@@ -11,8 +12,7 @@ Página de recuperação de senha - PETDor2
 import streamlit as st
 import logging
 
-from backend.auth.password_reset import solicitar_reset_senha
-from backend.auth.rate_limiter import verificar_rate_limit, obter_estatisticas
+from backend.auth.user import solicitar_recuperacao_senha
 from backend.utils.validators import validar_email
 
 logger = logging.getLogger(__name__)
@@ -34,8 +34,8 @@ def render():
     Digite o e-mail usado na sua conta do **PETDor**.  
     Se ele estiver cadastrado, enviaremos um link para redefinir sua senha.
 
-    ⏱️ **Importante:** Por segurança, você pode solicitar recuperação apenas 
-    **2 vezes a cada 15 minutos**.
+    ⏱️ **Importante:** Por segurança, há limites de envio de e-mails.
+    Se você já solicitou recentemente, aguarde alguns minutos.
     """)
 
     st.divider()
@@ -90,6 +90,10 @@ def render():
         - 📧 Se o e-mail digitado está correto
         - ⏱️ Aguarde alguns minutos (o e-mail pode demorar)
 
+        **Limites de segurança:**
+        - Você pode solicitar recuperação apenas algumas vezes por hora
+        - Se atingir o limite, aguarde 15 minutos
+
         **Ainda com problemas?**
         - Entre em contato pelo suporte: suporte@petdor.app
         """)
@@ -122,31 +126,13 @@ def _processar_solicitacao(email: str):
             return
 
         # -------------------------
-        # 2️⃣ VERIFICAR RATE LIMIT
-        # -------------------------
-        stats = obter_estatisticas("recuperacao_senha", email)
-
-        if not stats["pode_tentar"]:
-            if stats["em_cooldown_429"]:
-                st.warning(
-                    "⏱️ Você fez muitas tentativas recentemente. "
-                    "Aguarde 1 minuto antes de tentar novamente."
-                )
-            else:
-                st.warning(
-                    f"⏱️ Você já solicitou recuperação {stats['tentativas_recentes']} vez(es). "
-                    f"Aguarde alguns minutos antes de tentar novamente."
-                )
-            return
-
-        # -------------------------
-        # 3️⃣ SOLICITAR RECUPERAÇÃO
+        # 2️⃣ SOLICITAR RECUPERAÇÃO
         # -------------------------
         with st.spinner("⏳ Processando solicitação..."):
-            sucesso, mensagem = solicitar_reset_senha(email)
+            sucesso, mensagem = solicitar_recuperacao_senha(email)
 
         # -------------------------
-        # 4️⃣ FEEDBACK AO USUÁRIO
+        # 3️⃣ FEEDBACK AO USUÁRIO
         # -------------------------
         if sucesso:
             st.success("✅ Solicitação processada com sucesso!")
@@ -172,6 +158,12 @@ def _processar_solicitacao(email: str):
             # Diferenciar entre rate limit e outros erros
             if "⏱️" in mensagem:
                 st.warning(mensagem)
+
+                # Dica adicional para rate limit
+                st.info("""
+                💡 **Dica:** Se você já solicitou recuperação recentemente, 
+                verifique primeiro seu e-mail antes de tentar novamente.
+                """)
             else:
                 st.error(mensagem)
 
