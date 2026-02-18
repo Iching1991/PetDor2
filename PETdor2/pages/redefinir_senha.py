@@ -1,84 +1,34 @@
-"""
-Página de redefinição de senha - PETDor2
-"""
-
 import streamlit as st
-from supabase import create_client
+from backend.auth.password_reset import redefinir_senha
 
-# ============================================================
-# 🔑 CONFIG
-# ============================================================
-
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_ANON_KEY"]
-
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-
-# ============================================================
-# 🧠 CAPTURAR TOKEN
-# ============================================================
-
-def get_token():
-
-    params = st.query_params
-
-    access_token = params.get("access_token")
-    type_ = params.get("type")
-
-    if type_ != "recovery":
-        return None
-
-    return access_token
-
-
-# ============================================================
-# 🔐 RESET
-# ============================================================
 
 def render():
+    st.title("🔐 Redefinir Senha")
 
-    st.title("🔑 Redefinir senha")
+    # Verifica sessão criada pelo link do e-mail
+    session = st.session_state.get("supabase_session")
 
-    token = get_token()
+    if not session:
+        st.info(
+            "Abra esta página pelo link enviado ao seu e-mail."
+        )
 
-    if not token:
-        st.error("Link inválido ou expirado.")
-        st.stop()
+    nova = st.text_input("Nova senha", type="password")
+    confirmar = st.text_input("Confirmar senha", type="password")
 
-    nova_senha = st.text_input("Nova senha", type="password")
-    confirmar = st.text_input("Confirmar nova senha", type="password")
+    if st.button("Alterar senha"):
 
-    if st.button("Atualizar senha"):
-
-        if nova_senha != confirmar:
-            st.error("As senhas não coincidem.")
+        if not nova or not confirmar:
+            st.warning("Preencha todos os campos.")
             return
 
-        if len(nova_senha) < 8:
-            st.error("Senha deve ter pelo menos 8 caracteres.")
+        if nova != confirmar:
+            st.error("Senhas não coincidem.")
             return
 
-        try:
-            supabase.auth.set_session(
-                access_token=token,
-                refresh_token=token
-            )
+        sucesso, msg = redefinir_senha(nova)
 
-            supabase.auth.update_user({
-                "password": nova_senha
-            })
-
-            st.success("Senha atualizada com sucesso!")
-            st.info("Você já pode fazer login.")
-
-        except Exception as e:
-            st.error("Erro ao atualizar senha.")
-            st.exception(e)
-
-
-# ============================================================
-# 🚀 EXECUÇÃO
-# ============================================================
-
-render()
+        if sucesso:
+            st.success("Senha redefinida com sucesso!")
+        else:
+            st.error(msg)
