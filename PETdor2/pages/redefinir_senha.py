@@ -3,15 +3,11 @@ from backend.auth.password_reset import redefinir_senha
 
 
 def render():
+
     st.title("🔐 Redefinir Senha")
 
-    # Verifica sessão criada pelo link do e-mail
-    session = st.session_state.get("supabase_session")
-
-    if not session:
-        st.info(
-            "Abra esta página pelo link enviado ao seu e-mail."
-        )
+    # Verifica se veio de recovery
+    st.info("Digite sua nova senha abaixo.")
 
     nova = st.text_input("Nova senha", type="password")
     confirmar = st.text_input("Confirmar senha", type="password")
@@ -19,7 +15,7 @@ def render():
     if st.button("Alterar senha"):
 
         if not nova or not confirmar:
-            st.warning("Preencha todos os campos.")
+            st.warning("Preencha os campos.")
             return
 
         if nova != confirmar:
@@ -29,6 +25,13 @@ def render():
         sucesso, msg = redefinir_senha(nova)
 
         if sucesso:
-            st.success("Senha redefinida com sucesso!")
+            st.success(msg)
+            st.button(
+                "Ir para login",
+                on_click=lambda: st.switch_page("pages/login.py")
+            )
         else:
             st.error(msg)
+
+
+render()
