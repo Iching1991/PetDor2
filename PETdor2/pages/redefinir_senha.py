@@ -7,17 +7,16 @@ def render():
 
     st.title("🔐 Redefinir Senha")
 
-    # Capturar parâmetros (query + hash workaround)
-    params = st.query_params
+    # ✅ Compatível com Streamlit 1.29
+    params = st.experimental_get_query_params()
 
-    access_token = params.get("access_token")
-    refresh_token = params.get("refresh_token")
+    access_token = params.get("access_token", [None])[0]
+    refresh_token = params.get("refresh_token", [None])[0]
 
-    # Se token vier via query (modo alternativo)
+    # Se vier token via query
     if access_token and refresh_token:
         supabase.auth.set_session(access_token, refresh_token)
 
-    # Verifica sessão
     session = supabase.auth.get_session()
 
     if not session or not session.user:
@@ -30,6 +29,10 @@ def render():
     confirmar = st.text_input("Confirmar senha", type="password")
 
     if st.button("Alterar senha"):
+
+        if not nova or not confirmar:
+            st.warning("Preencha os campos.")
+            return
 
         if nova != confirmar:
             st.error("Senhas não coincidem.")
