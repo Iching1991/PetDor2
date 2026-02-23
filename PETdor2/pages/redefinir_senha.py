@@ -1,92 +1,67 @@
+#PetDor/PETdor2/pages/redefinir_senha.py
+
 import streamlit as st
 import re
 
 from backend.auth.password_reset import redefinir_senha
+from backend.utils.password_strength import (
+    calcular_forca_senha,
+    classificar_forca
+)
 
 
-# ==========================================================
-# 🔎 Validador de senha
-# ==========================================================
-def validar_senha(senha: str):
+def validar_regras(senha: str):
 
-    regras = {
+    return {
         "8+ caracteres": len(senha) >= 8,
-        "Letra maiúscula": bool(re.search(r"[A-Z]", senha)),
-        "Letra minúscula": bool(re.search(r"[a-z]", senha)),
+        "Maiúscula": bool(re.search(r"[A-Z]", senha)),
+        "Minúscula": bool(re.search(r"[a-z]", senha)),
         "Número": bool(re.search(r"[0-9]", senha)),
-        "Caractere especial": bool(re.search(r"[^A-Za-z0-9]", senha)),
+        "Especial": bool(re.search(r"[^A-Za-z0-9]", senha)),
     }
 
-    return regras
 
-
-# ==========================================================
-# 🎨 Render
-# ==========================================================
 def render():
 
     st.title("🔐 Redefinir Senha")
 
-    # ----------------------------
-    # Capturar parâmetros URL
-    # ----------------------------
     params = st.experimental_get_query_params()
 
     access_token = params.get("access_token", [None])[0]
     type_token = params.get("type", [None])[0]
 
     if not access_token or type_token != "recovery":
-        st.error("Sessão inválida. Solicite um novo link.")
+        st.error("Sessão inválida. Solicite novo link.")
         return
 
-    # ----------------------------
-    # Inputs
-    # ----------------------------
     nova = st.text_input("Nova senha", type="password")
     confirmar = st.text_input("Confirmar senha", type="password")
 
     # ----------------------------
-    # Validação dinâmica
+    # Barra de força
     # ----------------------------
     if nova:
 
-        regras = validar_senha(nova)
+        score = calcular_forca_senha(nova)
+        label, color = classificar_forca(score)
 
-        st.markdown("### 🛡️ Requisitos da senha")
+        st.progress(score / 100)
+        st.markdown(
+            f"**Força:** :{color}[{label}] ({score}%)"
+        )
 
-        for regra, ok in regras.items():
+        st.markdown("### Requisitos")
 
-            if ok:
-                st.markdown(f"✅ {regra}")
-            else:
-                st.markdown(f"❌ {regra}")
+        for regra, ok in validar_regras(nova).items():
 
-    # ----------------------------
-    # Confirmação
-    # ----------------------------
-    if confirmar:
-
-        if nova == confirmar:
-            st.markdown("✅ Senhas coincidem")
-        else:
-            st.markdown("❌ Senhas não coincidem")
+            st.markdown(
+                f"{'✅' if ok else '❌'} {regra}"
+            )
 
     # ----------------------------
     # Botão
     # ----------------------------
     if st.button("Alterar senha"):
-
-        if not nova or not confirmar:
-            st.warning("Preencha os campos.")
-            return
-
-        regras = validar_senha(nova)
-
-        if not all(regras.values()):
-            st.error(
-                "A senha não atende todos os requisitos."
-            )
-            return
 
         if nova != confirmar:
             st.error("Senhas não coincidem.")
@@ -95,10 +70,9 @@ def render():
         sucesso, msg = redefinir_senha(nova)
 
         if sucesso:
-            st.success("Senha redefinida com sucesso!")
+            st.success("Senha redefinida!")
         else:
             st.error(msg)
 
 
-# ==========================================================
 render()
