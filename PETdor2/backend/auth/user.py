@@ -1,9 +1,7 @@
 """
-Autenticação e Cadastro de Usuários - PETDor2
-Refatorado para constraint tipo_usuario_check
+Autenticação e Cadastro de Usuários — PETDor2
+Refatorado para constraints + rate limit + Supabase Auth
 
-Tipos válidos no banco:
-admin | tutor | vet | clinica
 """
 
 from typing import Tuple, Optional, Dict, Any
@@ -14,48 +12,26 @@ import re
 logger = logging.getLogger(__name__)
 
 # ==========================================================
-# 🔁 NORMALIZAÇÃO DE TIPOS
+# 🔧 NORMALIZAR TIPO USUÁRIO (constraint fix)
 # ==========================================================
-
-TIPO_MAP = {
-    "tutor": "tutor",
-    "Tutor": "tutor",
-
-    "veterinario": "vet",
-    "Veterinario": "vet",
-    "veterinário": "vet",
-    "Veterinário": "vet",
-    "vet": "vet",
-
-    "clinica": "clinica",
-    "Clínica": "clinica",
-    "clinica veterinaria": "clinica",
-
+TIPOS_VALIDOS = {
     "admin": "admin",
-    "Administrador": "admin",
+    "tutor": "tutor",
+    "veterinario": "vet",
+    "vet": "vet",
+    "clinica": "clinica",
+    "clínica": "clinica",
 }
-
-TIPOS_VALIDOS = {"admin", "tutor", "vet", "clinica"}
 
 
 def normalizar_tipo(tipo: str) -> str:
-    tipo = tipo.strip()
-
-    if tipo in TIPO_MAP:
-        return TIPO_MAP[tipo]
-
-    tipo_lower = tipo.lower()
-
-    if tipo_lower in TIPO_MAP:
-        return TIPO_MAP[tipo_lower]
-
-    return tipo_lower
+    tipo = tipo.lower().strip()
+    return TIPOS_VALIDOS.get(tipo, "tutor")
 
 
 # ==========================================================
 # 📝 CADASTRO
 # ==========================================================
-
 def cadastrar_usuario(
     nome: str,
     email: str,
@@ -74,50 +50,38 @@ def cadastrar_usuario(
         # -------------------------
         # Normalização
         # -------------------------
-        email = email.lower().strip()
         nome = nome.strip()
+        email = email.lower().strip()
+        senha = senha.strip()
+        tipo = normalizar_tipo(tipo)
         pais = pais.strip()
 
-        tipo_original = tipo
-        tipo = normalizar_tipo(tipo)
-
         # -------------------------
-        # Validar tipo
-        # -------------------------
-        if tipo not in TIPOS_VALIDOS:
-            return False, (
-                f"Tipo de usuário inválido: {tipo_original}. "
-                f"Use: tutor, veterinário ou clínica."
-            )
-
-        # -------------------------
-        # Validações básicas
+        # Validações
         # -------------------------
         if len(nome) < 3:
-            return False, "Nome deve ter pelo menos 3 caracteres."
-
-        if len(senha) < 6:
-            return False, "Senha deve ter pelo menos 6 caracteres."
+            return False, "Nome muito curto."
 
         if "@" not in email:
             return False, "E-mail inválido."
 
-        logger.info(f"🔄 Cadastro iniciado: {email}")
+        if len(senha) < 6:
+            return False, "Senha deve ter 6+ caracteres."
 
         # -------------------------
-        # Verificar duplicata
+        # Duplicata
         # -------------------------
-        existente = supabase_table_select(
+        existe = supabase_table_select(
             table="usuarios",
             filters={"email": email},
             limit=1,
         )
 
-        if existente:
-            return False, "Este e-mail já está cadastrado."
+        if existe:
+            return False, "E-mail já cadastrado."
 
         # -------------------------
-        # Criar no Auth
+        # Criar Auth
         # -------------------------
         auth_resp = supabase.auth.sign_up({
             "email": email,
@@ -138,8 +102,6 @@ def cadastrar_usuario(
 
         user_id = auth_resp.user.id
 
-        logger.info(f"✅ Auth criado: {user_id}")
-
         # -------------------------
         # Criar perfil
         # -------------------------
@@ -152,17 +114,15 @@ def cadastrar_usuario(
                 "tipo_usuario": tipo,
                 "pais": pais,
                 "ativo": True,
-                "is_admin": tipo == "admin",
+                "is_admin": False,
             },
         )
 
         if not perfil:
             return False, "Erro ao criar perfil."
 
-        logger.info(f"✅ Perfil criado: {user_id}")
-
         return True, (
-            "Conta criada com sucesso! "
+            "Conta criada com sucesso. "
             "Verifique seu e-mail."
         )
 
@@ -171,24 +131,33 @@ def cadastrar_usuario(
 
         error_msg = str(e).lower()
 
-        if "23514" in error_msg:
+        # 429
+        if "429" in error_msg:
             return False, (
-                "Tipo de usuário inválido para o banco."
+                "Muitos cadastros em pouco tempo. "
+                "Aguarde alguns minutos."
             )
 
-        if "already registered" in error_msg:
-            return False, "E-mail já cadastrado."
+        # Email rate
+        if "email rate limit exceeded" in error_msg:
+            return False, (
+                "Limite de e-mails atingido. "
+                "Aguarde 15 minutos."
+            )
 
-        if "weak password" in error_msg:
-            return False, "Senha muito fraca."
+        # Constraint
+        if "usuarios_tipo_usuario_check" in error_msg:
+            return False, (
+                "Tipo de usuário inválido. "
+                "Use: tutor, vet ou clinica."
+            )
 
-        return False, "Erro ao criar conta."
+        return False, "Erro ao cadastrar."
 
 
 # ==========================================================
 # 🔐 LOGIN
 # ==========================================================
-
 def fazer_login(
     email: str,
     senha: str
@@ -222,41 +191,89 @@ def fazer_login(
         return True, "Login realizado!", usuario[0]
 
     except Exception as e:
-        logger.exception("Erro login")
+        error_msg = str(e).lower()
 
-        if "email not confirmed" in str(e).lower():
+        if "email not confirmed" in error_msg:
             return False, "Confirme seu e-mail.", None
+
+        if "invalid login credentials" in error_msg:
+            return False, "Credenciais inválidas.", None
+
+        if "429" in error_msg:
+            return False, "Muitas tentativas.", None
 
         return False, "Erro no login.", None
 
 
 # ==========================================================
-# 🔄 RESET SENHA
+# 🚪 LOGOUT
 # ==========================================================
+def fazer_logout() -> Tuple[bool, str]:
 
-def redefinir_senha(nova_senha: str) -> Tuple[bool, str]:
+    from backend.database.supabase_client import supabase
+
+    try:
+        supabase.auth.sign_out()
+        return True, "Logout realizado."
+    except:
+        return False, "Erro no logout."
+
+
+# ==========================================================
+# 🔄 RECUPERAÇÃO
+# ==========================================================
+def solicitar_recuperacao_senha(
+    email: str
+) -> Tuple[bool, str]:
+
+    from backend.database.supabase_client import supabase
+
+    try:
+        supabase.auth.reset_password_email(
+            email,
+            options={
+                "redirect_to":
+                    st.secrets["app"]["STREAMLIT_APP_URL"]
+                    + "/redefinir_senha"
+            }
+        )
+
+        return True, "E-mail enviado."
+
+    except Exception as e:
+        if "429" in str(e):
+            return False, "Aguarde para tentar novamente."
+
+        return False, "Erro ao enviar e-mail."
+
+
+# ==========================================================
+# 🔐 REDEFINIR
+# ==========================================================
+def redefinir_senha(
+    nova_senha: str
+) -> Tuple[bool, str]:
 
     from backend.database.supabase_client import supabase
 
     try:
         if len(nova_senha) < 6:
-            return False, "Mínimo 6 caracteres."
+            return False, "Senha fraca."
 
         supabase.auth.update_user({
             "password": nova_senha
         })
 
-        return True, "Senha redefinida com sucesso."
+        return True, "Senha redefinida."
 
-    except Exception:
-        return False, "Erro ao redefinir senha."
+    except:
+        return False, "Erro ao redefinir."
 
 
 # ==========================================================
-# 👤 USUÁRIO ATUAL
+# 👤 SESSÃO
 # ==========================================================
-
-def obter_usuario_atual() -> Optional[Dict[str, Any]]:
+def obter_usuario_atual():
 
     from backend.database.supabase_client import supabase
     from backend.database import supabase_table_select
@@ -277,17 +294,32 @@ def obter_usuario_atual() -> Optional[Dict[str, Any]]:
 
         return usuario[0] if usuario else None
 
-    except Exception:
+    except:
         return None
+
+
+# ==========================================================
+# 👑 ADMIN
+# ==========================================================
+def e_admin() -> bool:
+
+    usuario = obter_usuario_atual()
+
+    if not usuario:
+        return False
+
+    return usuario.get("is_admin", False)
 
 
 # ==========================================================
 # EXPORTS
 # ==========================================================
-
 __all__ = [
     "cadastrar_usuario",
     "fazer_login",
+    "fazer_logout",
+    "solicitar_recuperacao_senha",
     "redefinir_senha",
     "obter_usuario_atual",
+    "e_admin",
 ]
