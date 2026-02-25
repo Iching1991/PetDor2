@@ -1,96 +1,51 @@
 # ==========================================================
-# 🚀 APP PRINCIPAL PETDor2 — UI REFATORADA
+# 🚀 APP PRINCIPAL — PETDor2
+# Arquitetura SaaS Veterinária
 # ==========================================================
 
 import streamlit as st
 
 # ==========================================================
-# ⚠️ CONFIGURAÇÃO GLOBAL (SEMPRE PRIMEIRO)
+# ⚙️ CONFIG GLOBAL (SEMPRE PRIMEIRO)
 # ==========================================================
 
 st.set_page_config(
-    page_title="PETDor",
+    page_title="PETdor",
     page_icon="🐾",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # ==========================================================
-# IMPORTS CORE
+# 🎨 CSS GLOBAL
 # ==========================================================
 
-from backend.database import testar_conexao
+from frontend.components.css import load_css
+load_css()
+
+# ==========================================================
+# 🧭 SIDEBAR
+# ==========================================================
+
 from frontend.components.sidebar import render_sidebar
-
-# Páginas
-from pages import (
-    login,
-    cadastro,
-    home,
-    avaliacao,
-    historico,
-    conta,
-    confirmar_email,
-    redefinir_senha,
-    recuperar_senha,
-)
-
-# ==========================================================
-# 🎨 ESTILO GLOBAL (opcional mas melhora UI)
-# ==========================================================
-
-st.markdown(
-    """
-    <style>
-
-    /* Remove padding topo */
-    .block-container {
-        padding-top: 1.5rem;
-    }
-
-    /* Sidebar largura */
-    section[data-testid="stSidebar"] {
-        width: 260px;
-    }
-
-    /* Botões largura total */
-    .stButton button {
-        width: 100%;
-        border-radius: 10px;
-        height: 45px;
-        font-weight: 600;
-    }
-
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# ==========================================================
-# 🔌 TESTE BACKEND (modo silencioso)
-# ==========================================================
-
-with st.spinner("Conectando backend..."):
-
-    if testar_conexao():
-        backend_ok = True
-    else:
-        backend_ok = False
-
-# Banner discreto no topo
-if backend_ok:
-    st.toast("Backend conectado ✅")
-else:
-    st.error("❌ Falha na conexão com backend")
-
-# ==========================================================
-# 🧭 SIDEBAR GLOBAL
-# ==========================================================
-
 render_sidebar()
 
 # ==========================================================
-# 🧠 SESSION STATE DEFAULTS
+# 🔌 BACKEND STATUS
+# ==========================================================
+
+from backend.database import testar_conexao
+
+with st.sidebar:
+    st.divider()
+
+    if testar_conexao():
+        st.success("🟢 Backend online")
+    else:
+        st.error("🔴 Backend offline")
+
+# ==========================================================
+# 🧠 SESSION CONTROL
 # ==========================================================
 
 if "pagina" not in st.session_state:
@@ -99,63 +54,88 @@ if "pagina" not in st.session_state:
 pagina = st.session_state.pagina
 
 # ==========================================================
-# 🧱 CONTAINER PRINCIPAL
+# 📦 IMPORT PÁGINAS
+# Lazy import evita circular import
 # ==========================================================
 
-main_container = st.container()
+def load_page(page_name):
+
+    if page_name == "login":
+        from pages import login
+        login.render()
+
+    elif page_name == "cadastro":
+        from pages import cadastro
+        cadastro.render()
+
+    elif page_name == "home":
+        from pages import home
+        home.render()
+
+    elif page_name == "avaliacao":
+        from pages import avaliacao
+        avaliacao.render()
+
+    elif page_name == "historico":
+        from pages import historico
+        historico.render()
+
+    elif page_name == "conta":
+        from pages import conta
+        conta.render()
+
+    elif page_name == "confirmar_email":
+        from pages import confirmar_email
+        confirmar_email.render()
+
+    elif page_name == "redefinir_senha":
+        from pages import redefinir_senha
+        redefinir_senha.render()
+
+    elif page_name == "recuperar_senha":
+        from pages import recuperar_senha
+        recuperar_senha.render()
+
+    else:
+        st.error(f"❌ Página '{page_name}' não encontrada.")
+
 
 # ==========================================================
-# 🚦 ROUTER DE PÁGINAS
+# 🔐 AUTH GUARD (Proteção básica)
+# ==========================================================
+
+PAGINAS_PUBLICAS = [
+    "login",
+    "cadastro",
+    "confirmar_email",
+    "redefinir_senha",
+    "recuperar_senha",
+]
+
+usuario_logado = st.session_state.get("user_data")
+
+if not usuario_logado and pagina not in PAGINAS_PUBLICAS:
+    st.warning("🔐 Faça login para acessar o sistema.")
+    st.session_state.pagina = "login"
+    st.rerun()
+
+# ==========================================================
+# 🖥️ RENDERIZAÇÃO DA PÁGINA
 # ==========================================================
 
 try:
-
-    with main_container:
-
-        # -------------------------
-        # AUTH
-        # -------------------------
-        if pagina == "login":
-            login.render()
-
-        elif pagina == "cadastro":
-            cadastro.render()
-
-        elif pagina == "confirmar_email":
-            confirmar_email.render()
-
-        elif pagina == "redefinir_senha":
-            redefinir_senha.render()
-
-        elif pagina == "recuperar_senha":
-            recuperar_senha.render()
-
-        # -------------------------
-        # APP
-        # -------------------------
-        elif pagina == "home":
-            home.render()
-
-        elif pagina == "avaliacao":
-            avaliacao.render()
-
-        elif pagina == "historico":
-            historico.render()
-
-        elif pagina == "conta":
-            conta.render()
-
-        # -------------------------
-        # FALLBACK
-        # -------------------------
-        else:
-            st.error(f"Página '{pagina}' não encontrada.")
-
-# ==========================================================
-# 🚨 ERRO GLOBAL
-# ==========================================================
+    load_page(pagina)
 
 except Exception as e:
-
-    st.error("❌ Erro ao carregar a aplicação.")
+    st.error("❌ Erro ao carregar página.")
     st.exception(e)
+
+# ==========================================================
+# 📌 FOOTER
+# ==========================================================
+
+st.divider()
+
+st.caption(
+    "© 2026 PETdor • Sistema Inteligente de Avaliação de Dor Animal 🐾"
+)
