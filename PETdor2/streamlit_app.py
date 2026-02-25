@@ -4,6 +4,11 @@
 # ==========================================================
 
 import streamlit as st
+import sys
+import os
+
+# 🔧 Garantir que o root do projeto esteja no path (evita erro frontend import)
+sys.path.append(os.path.dirname(__file__))
 
 # ==========================================================
 # ⚙️ CONFIG GLOBAL (SEMPRE PRIMEIRO)
@@ -20,29 +25,39 @@ st.set_page_config(
 # 🎨 CSS GLOBAL
 # ==========================================================
 
-from frontend.components.css import load_css
-load_css()
+try:
+    from frontend.components.css import load_css
+    load_css()
+except Exception:
+    pass  # Se CSS falhar, app continua
 
 # ==========================================================
 # 🧭 SIDEBAR
 # ==========================================================
 
-from frontend.components.sidebar import render_sidebar
-render_sidebar()
+try:
+    from frontend.components.sidebar import render_sidebar
+    render_sidebar()
+except Exception:
+    pass
 
 # ==========================================================
 # 🔌 BACKEND STATUS
 # ==========================================================
 
-from backend.database import testar_conexao
+try:
+    from backend.database import testar_conexao
 
-with st.sidebar:
-    st.divider()
+    with st.sidebar:
+        st.divider()
 
-    if testar_conexao():
-        st.success("🟢 Backend online")
-    else:
-        st.error("🔴 Backend offline")
+        if testar_conexao():
+            st.success("🟢 Backend online")
+        else:
+            st.error("🔴 Backend offline")
+
+except Exception:
+    pass
 
 # ==========================================================
 # 🧠 SESSION CONTROL
@@ -54,8 +69,25 @@ if "pagina" not in st.session_state:
 pagina = st.session_state.pagina
 
 # ==========================================================
-# 📦 IMPORT PÁGINAS
-# Lazy import evita circular import
+# 🔐 AUTH GUARD
+# ==========================================================
+
+PAGINAS_PUBLICAS = [
+    "login",
+    "cadastro",
+    "confirmar_email",
+    "redefinir_senha",
+    "recuperar_senha",
+]
+
+usuario_logado = st.session_state.get("user_data")
+
+if not usuario_logado and pagina not in PAGINAS_PUBLICAS:
+    st.session_state.pagina = "login"
+    st.rerun()
+
+# ==========================================================
+# 📦 ROUTER DE PÁGINAS (Lazy Import)
 # ==========================================================
 
 def load_page(page_name):
@@ -99,28 +131,8 @@ def load_page(page_name):
     else:
         st.error(f"❌ Página '{page_name}' não encontrada.")
 
-
 # ==========================================================
-# 🔐 AUTH GUARD (Proteção básica)
-# ==========================================================
-
-PAGINAS_PUBLICAS = [
-    "login",
-    "cadastro",
-    "confirmar_email",
-    "redefinir_senha",
-    "recuperar_senha",
-]
-
-usuario_logado = st.session_state.get("user_data")
-
-if not usuario_logado and pagina not in PAGINAS_PUBLICAS:
-    st.warning("🔐 Faça login para acessar o sistema.")
-    st.session_state.pagina = "login"
-    st.rerun()
-
-# ==========================================================
-# 🖥️ RENDERIZAÇÃO DA PÁGINA
+# 🖥️ RENDERIZAÇÃO
 # ==========================================================
 
 try:
@@ -135,7 +147,4 @@ except Exception as e:
 # ==========================================================
 
 st.divider()
-
-st.caption(
-    "© 2026 PETdor • Sistema Inteligente de Avaliação de Dor Animal 🐾"
-)
+st.caption("© 2026 PETdor • Sistema Inteligente de Avaliação de Dor Animal 🐾")
