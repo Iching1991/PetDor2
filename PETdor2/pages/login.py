@@ -3,48 +3,57 @@ from backend.auth.user import fazer_login
 from backend.utils.validators import validar_email
 
 
+# ==========================================================
+# 🔐 LOGIN PAGE
+# ==========================================================
 def render():
 
-    st.title("🔐 Login PETDor")
+    st.title("🔐 Login")
 
+    # Se já logado
     if st.session_state.get("user_data"):
-        st.success("Você já está logado.")
+        st.info("Você já está logado.")
         return
 
-    with st.form("form_login"):
+    # 🔑 FORM KEY DINÂMICA (evita duplicação)
+    form_key = "form_login_unique"
+
+    with st.form(key=form_key):
 
         email = st.text_input("E-mail").strip().lower()
         senha = st.text_input("Senha", type="password")
 
-        entrar = st.form_submit_button("Entrar")
+        col1, col2 = st.columns(2)
 
+        entrar = col1.form_submit_button("Entrar")
+        esqueci = col2.form_submit_button("Esqueci a senha")
+
+    # ======================================================
+    # 🔄 AÇÕES
+    # ======================================================
+
+    # Ir para recuperação
+    if esqueci:
+        st.session_state.pagina = "recuperar_senha"
+        st.rerun()
+
+    # Tentar login
     if not entrar:
         return
-
-    # -------------------------
-    # Validações
-    # -------------------------
 
     if not validar_email(email):
         st.error("E-mail inválido.")
         return
 
-    sucesso, msg, usuario = fazer_login(email, senha)
+    sucesso, mensagem, dados = fazer_login(email, senha)
 
     if not sucesso:
-        st.error(msg)
+        st.error(mensagem)
         return
 
-    # -------------------------
-    # Sessão
-    # -------------------------
-
-    st.session_state.user_data = usuario
-    st.session_state.pagina = "home"
+    # Salvar sessão
+    st.session_state["user_data"] = dados
+    st.session_state["pagina"] = "home"
 
     st.success("Login realizado com sucesso!")
     st.rerun()
-
-
-# ⚠️ EXECUÇÃO DIRETA (evita tela branca)
-render()
