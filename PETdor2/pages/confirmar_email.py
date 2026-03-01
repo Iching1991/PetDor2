@@ -1,63 +1,56 @@
-"""
-Página de confirmação de e-mail — PETDor2
-Fluxo compatível com Supabase Auth automático
-"""
-
 import streamlit as st
-from backend.auth.user import obter_usuario_atual
+import streamlit.components.v1 as components
+from backend.database.supabase_client import supabase
 
 
-# ==========================================================
-# 🖥️ Página
-# ==========================================================
+def capturar_hash():
+
+    components.html(
+        """
+        <script>
+        const hash = window.location.hash.substring(1);
+        const params = new URLSearchParams(hash);
+
+        const access_token = params.get("access_token");
+        const refresh_token = params.get("refresh_token");
+
+        if (access_token && refresh_token) {
+            window.parent.postMessage({
+                access_token: access_token,
+                refresh_token: refresh_token
+            }, "*");
+        }
+        </script>
+        """,
+        height=0,
+    )
+
 
 def render():
 
     st.title("📧 Confirmação de E-mail")
 
-    usuario = obter_usuario_atual()
+    capturar_hash()
 
-    # ------------------------------------------------------
-    # Link inválido ou sessão não criada
-    # ------------------------------------------------------
-    if not usuario:
-        st.error("❌ Link inválido ou expirado.")
-        st.info("Solicite um novo link de confirmação.")
-
-        if st.button("🔐 Ir para Login"):
-            st.session_state.pagina = "login"
-            st.rerun()
-
+    if "access_token" not in st.session_state:
+        st.info("Validando confirmação...")
         return
 
-    # ------------------------------------------------------
-    # Confirmação bem sucedida
-    # ------------------------------------------------------
-    st.success("🎉 E-mail confirmado com sucesso!")
-    st.info("Sua conta já está ativa.")
+    try:
+        supabase.auth.set_session(
+            st.session_state["access_token"],
+            st.session_state["refresh_token"],
+        )
 
-    col1, col2 = st.columns(2)
+        st.success("🎉 E-mail confirmado com sucesso!")
 
-    with col1:
-        if st.button("🏠 Ir para Home", use_container_width=True):
-            st.session_state.pagina = "home"
-            st.rerun()
+    except Exception:
+        st.error("❌ Link inválido ou expirado.")
+        return
 
-    with col2:
-        if st.button("🔐 Ir para Login", use_container_width=True):
-            st.session_state.pagina = "login"
-            st.rerun()
+    if st.button("🔐 Ir para Login"):
+        st.session_state.pagina = "login"
+        st.rerun()
 
 
-# ==========================================================
-# 🚀 Execução segura
-# ==========================================================
-
-try:
-    render()
-except Exception as e:
-    st.error("❌ Erro ao carregar página.")
-    st.exception(e)
-
-
-__all__ = ["render"]
+render()
