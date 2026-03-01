@@ -1,19 +1,18 @@
 """
 Autenticação e Cadastro de Usuários — PETDor2
-Refatorado para constraints + rate limit + Supabase Auth
-
+Versão estável para Supabase Auth + constraints + rate limit
 """
 
 from typing import Tuple, Optional, Dict, Any
 import streamlit as st
 import logging
-import re
 
 logger = logging.getLogger(__name__)
 
 # ==========================================================
-# 🔧 NORMALIZAR TIPO USUÁRIO (constraint fix)
+# 🔧 NORMALIZAÇÃO DE TIPO (compatível com constraint)
 # ==========================================================
+
 TIPOS_VALIDOS = {
     "admin": "admin",
     "tutor": "tutor",
@@ -25,13 +24,15 @@ TIPOS_VALIDOS = {
 
 
 def normalizar_tipo(tipo: str) -> str:
-    tipo = tipo.lower().strip()
-    return TIPOS_VALIDOS.get(tipo, "tutor")
+    if not tipo:
+        return "tutor"
+    return TIPOS_VALIDOS.get(tipo.lower().strip(), "tutor")
 
 
 # ==========================================================
 # 📝 CADASTRO
 # ==========================================================
+
 def cadastrar_usuario(
     nome: str,
     email: str,
@@ -41,10 +42,7 @@ def cadastrar_usuario(
 ) -> Tuple[bool, str]:
 
     from backend.database.supabase_client import supabase
-    from backend.database import (
-        supabase_table_insert,
-        supabase_table_select,
-    )
+    from backend.database import supabase_table_insert, supabase_table_select
 
     try:
         # -------------------------
@@ -57,7 +55,7 @@ def cadastrar_usuario(
         pais = pais.strip()
 
         # -------------------------
-        # Validações
+        # Validações básicas
         # -------------------------
         if len(nome) < 3:
             return False, "Nome muito curto."
@@ -66,22 +64,22 @@ def cadastrar_usuario(
             return False, "E-mail inválido."
 
         if len(senha) < 6:
-            return False, "Senha deve ter 6+ caracteres."
+            return False, "Senha deve ter no mínimo 6 caracteres."
 
         # -------------------------
-        # Duplicata
+        # Verificar duplicata
         # -------------------------
-        existe = supabase_table_select(
+        existente = supabase_table_select(
             table="usuarios",
             filters={"email": email},
             limit=1,
         )
 
-        if existe:
+        if existente:
             return False, "E-mail já cadastrado."
 
         # -------------------------
-        # Criar Auth
+        # Criar no Supabase Auth
         # -------------------------
         auth_resp = supabase.auth.sign_up({
             "email": email,
@@ -97,13 +95,13 @@ def cadastrar_usuario(
             }
         })
 
-        if not auth_resp.user:
-            return False, "Erro ao criar usuário."
+        if not auth_resp or not auth_resp.user:
+            return False, "Erro ao criar usuário no Auth."
 
         user_id = auth_resp.user.id
 
         # -------------------------
-        # Criar perfil
+        # Criar perfil local
         # -------------------------
         perfil = supabase_table_insert(
             table="usuarios",
@@ -114,7 +112,7 @@ def cadastrar_usuario(
                 "tipo_usuario": tipo,
                 "pais": pais,
                 "ativo": True,
-                "is_admin": False,
+                "is_admin": tipo == "admin",
             },
         )
 
@@ -122,35 +120,26 @@ def cadastrar_usuario(
             return False, "Erro ao criar perfil."
 
         return True, (
-            "Conta criada com sucesso. "
-            "Verifique seu e-mail."
+            "Conta criada com sucesso! "
+            "Verifique seu e-mail para confirmar."
         )
 
     except Exception as e:
-        logger.exception("Erro cadastro")
+        logger.exception("Erro no cadastro")
 
-        error_msg = str(e).lower()
+        msg = str(e).lower()
 
-        # 429
-        if "429" in error_msg:
-            return False, (
-                "Muitos cadastros em pouco tempo. "
-                "Aguarde alguns minutos."
-            )
+        if "email rate limit exceeded" in msg:
+            return False, "Limite de envio de e-mails atingido. Aguarde 15 minutos."
 
-        # Email rate
-        if "email rate limit exceeded" in error_msg:
-            return False, (
-                "Limite de e-mails atingido. "
-                "Aguarde 15 minutos."
-            )
+        if "429" in msg:
+            return False, "Muitas tentativas. Aguarde alguns minutos."
 
-        # Constraint
-        if "usuarios_tipo_usuario_check" in error_msg:
-            return False, (
-                "Tipo de usuário inválido. "
-                "Use: tutor, vet ou clinica."
-            )
+        if "duplicate key" in msg:
+            return False, "E-mail já cadastrado."
+
+        if "usuarios_tipo_usuario_check" in msg:
+            return False, "Tipo inválido. Use: tutor, vet ou clinica."
 
         return False, "Erro ao cadastrar."
 
@@ -158,6 +147,7 @@ def cadastrar_usuario(
 # ==========================================================
 # 🔐 LOGIN
 # ==========================================================
+
 def fazer_login(
     email: str,
     senha: str
@@ -174,7 +164,7 @@ def fazer_login(
             "password": senha,
         })
 
-        if not auth_resp.user:
+        if not auth_resp or not auth_resp.user:
             return False, "Credenciais inválidas.", None
 
         user_id = auth_resp.user.id
@@ -191,16 +181,16 @@ def fazer_login(
         return True, "Login realizado!", usuario[0]
 
     except Exception as e:
-        error_msg = str(e).lower()
+        msg = str(e).lower()
 
-        if "email not confirmed" in error_msg:
-            return False, "Confirme seu e-mail.", None
+        if "email not confirmed" in msg:
+            return False, "Confirme seu e-mail antes de fazer login.", None
 
-        if "invalid login credentials" in error_msg:
+        if "invalid login credentials" in msg:
             return False, "Credenciais inválidas.", None
 
-        if "429" in error_msg:
-            return False, "Muitas tentativas.", None
+        if "429" in msg:
+            return False, "Muitas tentativas. Aguarde.", None
 
         return False, "Erro no login.", None
 
@@ -208,6 +198,7 @@ def fazer_login(
 # ==========================================================
 # 🚪 LOGOUT
 # ==========================================================
+
 def fazer_logout() -> Tuple[bool, str]:
 
     from backend.database.supabase_client import supabase
@@ -220,11 +211,10 @@ def fazer_logout() -> Tuple[bool, str]:
 
 
 # ==========================================================
-# 🔄 RECUPERAÇÃO
+# 🔄 RECUPERAÇÃO DE SENHA
 # ==========================================================
-def solicitar_recuperacao_senha(
-    email: str
-) -> Tuple[bool, str]:
+
+def solicitar_recuperacao_senha(email: str) -> Tuple[bool, str]:
 
     from backend.database.supabase_client import supabase
 
@@ -237,22 +227,18 @@ def solicitar_recuperacao_senha(
                     + "/redefinir_senha"
             }
         )
-
         return True, "E-mail enviado."
-
     except Exception as e:
         if "429" in str(e):
-            return False, "Aguarde para tentar novamente."
-
+            return False, "Aguarde antes de tentar novamente."
         return False, "Erro ao enviar e-mail."
 
 
 # ==========================================================
-# 🔐 REDEFINIR
+# 🔐 REDEFINIR SENHA
 # ==========================================================
-def redefinir_senha(
-    nova_senha: str
-) -> Tuple[bool, str]:
+
+def redefinir_senha(nova_senha: str) -> Tuple[bool, str]:
 
     from backend.database.supabase_client import supabase
 
@@ -260,19 +246,17 @@ def redefinir_senha(
         if len(nova_senha) < 6:
             return False, "Senha fraca."
 
-        supabase.auth.update_user({
-            "password": nova_senha
-        })
+        supabase.auth.update_user({"password": nova_senha})
 
-        return True, "Senha redefinida."
-
+        return True, "Senha redefinida com sucesso."
     except:
-        return False, "Erro ao redefinir."
+        return False, "Erro ao redefinir senha."
 
 
 # ==========================================================
-# 👤 SESSÃO
+# 👤 USUÁRIO ATUAL
 # ==========================================================
+
 def obter_usuario_atual():
 
     from backend.database.supabase_client import supabase
@@ -301,6 +285,7 @@ def obter_usuario_atual():
 # ==========================================================
 # 👑 ADMIN
 # ==========================================================
+
 def e_admin() -> bool:
 
     usuario = obter_usuario_atual()
@@ -308,12 +293,13 @@ def e_admin() -> bool:
     if not usuario:
         return False
 
-    return usuario.get("is_admin", False)
+    return usuario.get("is_admin", False) is True
 
 
 # ==========================================================
 # EXPORTS
 # ==========================================================
+
 __all__ = [
     "cadastrar_usuario",
     "fazer_login",
