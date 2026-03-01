@@ -1,56 +1,44 @@
 import streamlit as st
-import streamlit.components.v1 as components
 from backend.database.supabase_client import supabase
 
 
-def capturar_hash():
-
-    components.html(
-        """
-        <script>
-        const hash = window.location.hash.substring(1);
-        const params = new URLSearchParams(hash);
-
-        const access_token = params.get("access_token");
-        const refresh_token = params.get("refresh_token");
-
-        if (access_token && refresh_token) {
-            window.parent.postMessage({
-                access_token: access_token,
-                refresh_token: refresh_token
-            }, "*");
-        }
-        </script>
-        """,
-        height=0,
-    )
-
-
 def render():
-
     st.title("📧 Confirmação de E-mail")
 
-    capturar_hash()
+    # Capturar parâmetros da URL
+    params = st.query_params
 
-    if "access_token" not in st.session_state:
-        st.info("Validando confirmação...")
-        return
+    access_token = params.get("access_token")
+    refresh_token = params.get("refresh_token")
+    type_token = params.get("type")
 
-    try:
-        supabase.auth.set_session(
-            st.session_state["access_token"],
-            st.session_state["refresh_token"],
-        )
-
-        st.success("🎉 E-mail confirmado com sucesso!")
-
-    except Exception:
+    # Supabase envia type=signup
+    if type_token != "signup":
         st.error("❌ Link inválido ou expirado.")
         return
 
-    if st.button("🔐 Ir para Login"):
-        st.session_state.pagina = "login"
-        st.rerun()
+    if not access_token or not refresh_token:
+        st.error("❌ Token não encontrado.")
+        return
+
+    try:
+        # Criar sessão manualmente
+        supabase.auth.set_session(
+            access_token,
+            refresh_token
+        )
+
+        st.success("🎉 E-mail confirmado com sucesso!")
+        st.info("Sua conta está ativa.")
+
+        if st.button("🏠 Ir para Home"):
+            st.session_state.pagina = "home"
+            st.rerun()
+
+    except Exception as e:
+        st.error("❌ Erro ao validar sessão.")
+        st.exception(e)
 
 
-render()
+if __name__ == "__main__":
+    render()
